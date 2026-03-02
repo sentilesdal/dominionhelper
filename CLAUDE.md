@@ -5,24 +5,32 @@ Chrome extension for dominion.games that analyzes the current kingdom (set of 10
 
 ## Tech Stack
 - Chrome Extension Manifest V3
-- Vanilla JavaScript (ES2022+, ESM modules)
+- Vanilla JavaScript (IIFE pattern, no build step)
 - Vitest for testing
-- No build step — source files are the extension files
+- Source files are the extension files directly (no bundler)
 
 ## Project Structure
-- `manifest.json` — Chrome extension manifest
+- `manifest.json` — Chrome extension manifest, loads content scripts in dependency order
 - `src/content/` — Content scripts injected into dominion.games (observer, UI overlay)
 - `src/analysis/` — Kingdom analysis engine (synergies, archetypes, openings)
-- `src/data/cards.json` — Card database with tags for synergy detection
+- `src/data/cards.json` — Card database source of truth (used by tests)
+- `src/data/cards-bundle.js` — Card data as JS for content scripts (`window.DominionHelper.cardData`)
 - `src/popup/` — Extension popup UI
 - `src/background/` — Service worker for message passing
 - `tests/` — Vitest tests
 - `docs/adr/` — Architecture Decision Records
 
+## Module Pattern
+Content scripts can't use ES module imports. All files use IIFE + shared namespace:
+- Browser: `window.DominionHelper` namespace (scripts loaded in order via manifest)
+- Tests: `module.exports` / `require()` (CommonJS)
+
 ## Key Patterns
 - Cards are tagged with functional categories (village, trasher, curser, etc.)
 - Synergy detection is rule-based: if tag combinations exist, report the synergy
-- DOM observation uses MutationObserver to detect when kingdom cards appear
+- DOM observation uses MutationObserver to detect kingdom cards
+- Primary DOM selector: `.kingdom-viewer-group .full-card-name.card-name`
+- Secondary: `span[onmousedown*="publicStudyRequest"]` attribute parsing
 - Analysis is purely client-side — no external API calls
 
 ## Testing
@@ -37,8 +45,7 @@ npm run test:watch # Watch mode
 3. Click "Load unpacked" and select this project root directory
 
 ## Card Data
-`src/data/cards.json` currently has the base set (2nd edition). Cards from other expansions need to be added with proper tags. Each card needs:
-- `name`, `set`, `types`, `cost`, `text`
-- `tags` array (village, trasher, curser, gainer, etc.)
-- `isTerminal` boolean
-- `effects` object (actions, cards, buys, coins)
+`src/data/cards.json` currently has the base set (2nd edition). When adding cards:
+1. Add to `cards.json` (source of truth)
+2. Update `cards-bundle.js` to match
+3. Each card needs: `name`, `set`, `types`, `cost`, `effects`, `tags[]`, `isTerminal`

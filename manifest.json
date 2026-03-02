@@ -3,14 +3,22 @@
   "name": "Dominion Helper",
   "version": "0.1.0",
   "description": "Analyzes Dominion Online kingdoms for card synergies, strategy archetypes, and opening recommendations.",
-  "permissions": [],
+  "permissions": ["storage"],
   "host_permissions": [
     "https://dominion.games/*"
   ],
   "content_scripts": [
     {
       "matches": ["https://dominion.games/*"],
-      "js": ["src/content/content.js"],
+      "js": [
+        "src/data/cards-bundle.js",
+        "src/analysis/synergies.js",
+        "src/analysis/archetypes.js",
+        "src/analysis/engine.js",
+        "src/content/observer.js",
+        "src/content/ui.js",
+        "src/content/content.js"
+      ],
       "css": ["src/content/overlay.css"],
       "run_at": "document_idle"
     }

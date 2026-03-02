@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { analyzeKingdom } from '../src/analysis/engine.js';
+
+// The analysis files use IIFE + module.exports for dual-environment support
+const { analyzeKingdom } = require('../src/analysis/engine.js');
 
 describe('analyzeKingdom', () => {
   it('detects engine components in Village/Smithy kingdom', () => {
@@ -14,7 +16,7 @@ describe('analyzeKingdom', () => {
     expect(result.components.some((c) => c.includes('Smithy'))).toBe(true);
   });
 
-  it('detects trashing synergy', () => {
+  it('detects trashing synergy with curse defense', () => {
     const kingdom = [
       'Village', 'Smithy', 'Chapel', 'Market', 'Festival',
       'Witch', 'Moat', 'Remodel', 'Laboratory', 'Gardens',
@@ -25,14 +27,13 @@ describe('analyzeKingdom', () => {
     expect(result.synergies.some((s) => s.toLowerCase().includes('curse'))).toBe(true);
   });
 
-  it('flags missing components', () => {
+  it('flags missing village', () => {
     const kingdom = [
       'Smithy', 'Militia', 'Bureaucrat', 'Moneylender', 'Bandit',
       'Mine', 'Witch', 'Library', 'Artisan', 'Vassal',
     ];
     const result = analyzeKingdom(kingdom);
 
-    // No village in this kingdom
     expect(result.notes.some((n) => n.includes('No village'))).toBe(true);
   });
 
@@ -48,16 +49,14 @@ describe('analyzeKingdom', () => {
     ).toBe(true);
   });
 
-  it('detects slog conditions', () => {
+  it('detects slog conditions when attacks exist without trashing', () => {
     const kingdom = [
-      'Witch', 'Militia', 'Smithy', 'Vassal', 'Bandit',
-      'Bureaucrat', 'Library', 'Artisan', 'Mine', 'Moat',
+      'Militia', 'Bureaucrat', 'Smithy', 'Vassal', 'Bandit',
+      'Library', 'Artisan', 'Council Room', 'Moat', 'Poacher',
     ];
     const result = analyzeKingdom(kingdom);
 
-    // No trasher (Mine trashes treasures, not curses effectively)
-    // But Mine is tagged as trasher so this may find trashing
-    expect(result.notes.length).toBeGreaterThan(0);
+    expect(result.notes.some((n) => n.includes('No trashing'))).toBe(true);
   });
 
   it('returns empty analysis for unknown cards gracefully', () => {
@@ -66,5 +65,29 @@ describe('analyzeKingdom', () => {
 
     expect(result).toBeDefined();
     expect(result.components).toEqual([]);
+  });
+
+  it('detects full engine potential', () => {
+    const kingdom = [
+      'Village', 'Smithy', 'Chapel', 'Market', 'Festival',
+      'Laboratory', 'Witch', 'Moat', 'Remodel', 'Council Room',
+    ];
+    const result = analyzeKingdom(kingdom);
+
+    expect(
+      result.synergies.some((s) => s.includes('Full engine potential'))
+    ).toBe(true);
+  });
+
+  it('detects Throne Room synergy', () => {
+    const kingdom = [
+      'Throne Room', 'Witch', 'Village', 'Smithy', 'Market',
+      'Festival', 'Chapel', 'Moat', 'Remodel', 'Laboratory',
+    ];
+    const result = analyzeKingdom(kingdom);
+
+    expect(
+      result.synergies.some((s) => s.includes('Throne Room'))
+    ).toBe(true);
   });
 });

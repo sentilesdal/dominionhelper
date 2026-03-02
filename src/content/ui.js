@@ -1,74 +1,77 @@
 // Dominion Helper - Overlay UI
 // Renders analysis results as an overlay panel on dominion.games
 
-import { analyzeKingdom } from '../analysis/engine.js';
+(function () {
+  'use strict';
 
-const PANEL_ID = 'dominion-helper-panel';
+  const DH = window.DominionHelper;
+  const PANEL_ID = 'dominion-helper-panel';
 
-function createPanel() {
-  let panel = document.getElementById(PANEL_ID);
-  if (panel) return panel;
+  function createPanel() {
+    let panel = document.getElementById(PANEL_ID);
+    if (panel) return panel;
 
-  panel = document.createElement('div');
-  panel.id = PANEL_ID;
-  document.body.appendChild(panel);
-  return panel;
-}
+    panel = document.createElement('div');
+    panel.id = PANEL_ID;
+    document.body.appendChild(panel);
+    return panel;
+  }
 
-function renderSection(title, items, className) {
-  if (!items || items.length === 0) return '';
+  function renderSection(title, items, className) {
+    if (!items || items.length === 0) return '';
 
-  const itemsHtml = items
-    .map((item) => `<div class="dh-item">${item}</div>`)
-    .join('');
+    const itemsHtml = items
+      .map((item) => `<div class="dh-item">${escapeHtml(item)}</div>`)
+      .join('');
 
-  return `
-    <div class="dh-section ${className}">
-      <div class="dh-section-title">${title}</div>
-      ${itemsHtml}
-    </div>
-  `;
-}
+    return `
+      <div class="dh-section ${className}">
+        <div class="dh-section-title">${escapeHtml(title)}</div>
+        ${itemsHtml}
+      </div>
+    `;
+  }
 
-export function renderOverlay(cardNames) {
-  const analysis = analyzeKingdom(cardNames);
-  const panel = createPanel();
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
 
-  let html = `
-    <div class="dh-header">
-      <span class="dh-title">Dominion Helper</span>
-      <button class="dh-toggle" id="dh-toggle-btn">_</button>
-    </div>
-    <div class="dh-body" id="dh-body">
-  `;
+  function renderOverlay(cardNames) {
+    const analysis = DH.analyzeKingdom(cardNames);
+    const panel = createPanel();
 
-  // Kingdom overview
-  html += renderSection(
-    'Kingdom Components',
-    analysis.components,
-    'dh-components'
-  );
+    let html = `
+      <div class="dh-header">
+        <span class="dh-title">Dominion Helper</span>
+        <button class="dh-toggle" id="dh-toggle-btn">_</button>
+      </div>
+      <div class="dh-body" id="dh-body">
+    `;
 
-  // Synergies
-  html += renderSection('Synergies', analysis.synergies, 'dh-synergies');
+    html += renderSection(
+      'Kingdom Components',
+      analysis.components,
+      'dh-components'
+    );
+    html += renderSection('Synergies', analysis.synergies, 'dh-synergies');
+    html += renderSection(
+      'Viable Strategies',
+      analysis.archetypes,
+      'dh-archetypes'
+    );
+    html += renderSection('Key Notes', analysis.notes, 'dh-notes');
 
-  // Strategy archetypes
-  html += renderSection(
-    'Viable Strategies',
-    analysis.archetypes,
-    'dh-archetypes'
-  );
+    html += '</div>';
 
-  // Warnings / things to note
-  html += renderSection('Key Notes', analysis.notes, 'dh-notes');
+    panel.innerHTML = html;
 
-  html += '</div>';
+    document.getElementById('dh-toggle-btn').addEventListener('click', () => {
+      const body = document.getElementById('dh-body');
+      body.classList.toggle('dh-collapsed');
+    });
+  }
 
-  panel.innerHTML = html;
-
-  // Toggle minimize
-  document.getElementById('dh-toggle-btn').addEventListener('click', () => {
-    const body = document.getElementById('dh-body');
-    body.classList.toggle('dh-collapsed');
-  });
-}
+  DH.renderOverlay = renderOverlay;
+})();

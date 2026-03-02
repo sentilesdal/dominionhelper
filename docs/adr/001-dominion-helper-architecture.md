@@ -33,11 +33,22 @@ We want to build a Chrome extension that analyzes the current kingdom and surfac
 - 16+ expansions: Dominion, Intrigue, Seaside, Alchemy, Prosperity, Cornucopia, Hinterlands, Dark Ages, Guilds, Adventures, Empires, Nocturne, Renaissance, Menagerie, Allies, Plunder, Rising Sun
 - Landscape types: Events, Projects, Ways, Allies, Traits, Prophecies, Landmarks
 
-#### dominion.games Technical Details
-- The client appears to use vanilla JavaScript (no major SPA framework detected)
-- Game state communicated via WebSocket connections
-- Card names appear in the DOM as text content within game log entries and supply piles
-- Existing extensions (King's Courtier, Dominion Companion) successfully parse the DOM, confirming feasibility
+#### dominion.games Technical Details (Confirmed via Reverse Engineering)
+- The client is a custom SPA using vanilla JavaScript (no React/Vue/Angular detected)
+- Game state communicated via WebSocket connections (proprietary protocol, undocumented)
+- **All existing extensions avoid the WebSocket layer** — they work exclusively through DOM parsing
+- **Confirmed DOM selectors**:
+  - Kingdom cards: `.kingdom-viewer-group .full-card-name.card-name`
+  - Landscape cards: `.landscape-name` (use `:not(.unselectable)` to filter)
+  - Game log: `.game-log` container with `.log-line` / `.actual-log` children
+  - Card names in log: `<span onmousedown="publicStudyRequest(event, 'CardName')">` — most reliable extraction method
+  - Opponent VP: `.opponent-name` elements contain VP counters
+- **Card image URLs**: `https://dominion.games/images/cards/art/{set-name}/{card-name}.jpg` (kebab-case)
+- **Existing open-source extensions** (LogDog, DominionTracker, dominion-helper) all use DOM parsing successfully
+- Content scripts share the DOM but have isolated JS contexts from the page
+
+#### Ethical Consideration
+The Dominion community considers some forms of automated tracking (e.g., perfect deck tracking) to be unsportsmanlike in competitive play. Our extension focuses on pre-game kingdom analysis (which experienced players do mentally anyway), not real-time deck tracking.
 
 ---
 
@@ -225,34 +236,58 @@ Evaluate the best opening buys based on the 5/2 vs 4/3 split:
 
 ```
 dominionhelper/
-├── manifest.json          # Extension manifest (V3)
+├── manifest.json              # Extension manifest (V3)
 ├── src/
 │   ├── content/
-│   │   ├── content.js     # Content script injected into dominion.games
-│   │   ├── observer.js    # MutationObserver to detect kingdom cards
-│   │   └── ui.js          # Overlay/panel UI rendering
+│   │   ├── content.js         # Content script entry point
+│   │   ├── observer.js        # MutationObserver for kingdom detection
+│   │   ├── ui.js              # Overlay panel rendering
+│   │   └── overlay.css        # Panel styles
 │   ├── analysis/
-│   │   ├── engine.js      # Main analysis engine
-│   │   ├── synergies.js   # Synergy detection rules
-│   │   ├── archetypes.js  # Strategy archetype detection
-│   │   └── openings.js    # Opening analysis
+│   │   ├── engine.js          # Main analysis engine
+│   │   ├── synergies.js       # Synergy detection rules
+│   │   ├── archetypes.js      # Strategy archetype detection
+│   │   └── openings.js        # Opening analysis (Phase 2)
 │   ├── data/
-│   │   ├── cards.json     # Complete card database
-│   │   ├── tags.json      # Card tags/categories (village, trasher, etc.)
-│   │   └── combos.json    # Known card combinations
+│   │   ├── cards.json         # Card database (source of truth, for tests)
+│   │   └── cards-bundle.js    # Card data as JS (for content scripts)
 │   ├── popup/
-│   │   ├── popup.html     # Extension popup UI
-│   │   ├── popup.js       # Popup logic
-│   │   └── popup.css      # Popup styles
+│   │   ├── popup.html         # Extension popup UI
+│   │   ├── popup.js           # Popup logic
+│   │   └── popup.css          # Popup styles
 │   └── background/
 │       └── service-worker.js  # Background service worker
-├── icons/                 # Extension icons
-├── docs/
-│   └── adr/              # Architecture Decision Records
-├── tests/                # Unit tests
-├── package.json
-└── README.md
+├── icons/                     # Extension icons
+├── docs/adr/                  # Architecture Decision Records
+├── tests/                     # Vitest tests
+└── package.json
 ```
+
+### Module Pattern
+
+Chrome content scripts do not support ES module imports. All source files use an
+IIFE (Immediately Invoked Function Expression) pattern with a shared
+`window.DominionHelper` namespace in the browser and `module.exports` for tests:
+
+```javascript
+(function () {
+  // Browser: read from window.DominionHelper
+  // Node/test: use require()
+  if (typeof window !== 'undefined') {
+    window.DominionHelper.myFunction = myFunction;
+  }
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { myFunction };
+  }
+})();
+```
+
+Content scripts are loaded in dependency order via the manifest's `content_scripts` array:
+1. `cards-bundle.js` (data)
+2. `synergies.js`, `archetypes.js` (analysis modules)
+3. `engine.js` (depends on above)
+4. `observer.js`, `ui.js` (content layer)
+5. `content.js` (entry point)
 
 ### Data Model
 
@@ -295,12 +330,13 @@ dominionhelper/
 
 ### Phase 1: DOM Detection Strategy
 
-The content script will:
-1. Use a `MutationObserver` to watch for changes in the game page DOM
-2. Detect when a game starts and kingdom cards are displayed
-3. Extract card names from the supply area (text content matching known card names)
-4. Pass the card list to the analysis engine
-5. Display results in an overlay panel
+The content script uses three strategies in priority order:
+
+1. **Primary**: Query `.kingdom-viewer-group .full-card-name.card-name` elements (confirmed selector)
+2. **Secondary**: Parse `onmousedown="publicStudyRequest(event, 'CardName')"` attributes on `<span>` elements
+3. **Fallback**: Broad text-node scanning against the known card name set
+
+A `MutationObserver` watches for DOM changes with a 500ms debounce. When 10+ kingdom cards are detected, the analysis engine runs and the overlay panel renders.
 
 ### Phase 2+ Roadmap
 - **Phase 1** (current): Static synergy analysis based on card presence in kingdom

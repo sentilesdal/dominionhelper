@@ -1,73 +1,102 @@
 // Dominion Helper - DOM Observer
 // Watches for kingdom cards to appear on the dominion.games page
 //
-// Strategy: dominion.games renders card names as text in the supply area.
-// We use a MutationObserver to detect when the game view loads, then
-// extract card names by matching DOM text content against our card database.
+// Confirmed DOM structure from reverse-engineering existing extensions:
+// - Kingdom cards: .kingdom-viewer-group > .full-card-name.card-name
+// - Landscape cards: .landscape-name
+// - Card names in log: <span onmousedown="publicStudyRequest(event, 'CardName')">
+// - Game log: .game-log > .log-line / .actual-log
 
-import cardData from '../data/cards.json' with { type: 'json' };
+(function () {
+  'use strict';
 
-const ALL_CARD_NAMES = new Set(cardData.map((c) => c.name));
+  const DH = window.DominionHelper;
+  const ALL_CARD_NAMES = new Set(DH.cardData.map((c) => c.name));
 
-// Selectors may need updating if dominion.games changes their DOM structure.
-// These are starting points — we'll refine once we can inspect the live site.
-const SUPPLY_SELECTORS = [
-  '.kingdom-viewer-group',
-  '.supply-card',
-  '.name-layer',
-  '.card-name',
-];
+  /**
+   * Extract kingdom card names from the supply/kingdom viewer area.
+   * Uses multiple strategies in order of reliability.
+   */
+  function extractCardNames(root) {
+    const found = new Set();
 
-function extractCardNames(root) {
-  const found = new Set();
-
-  // Strategy 1: Look for elements matching known selectors
-  for (const selector of SUPPLY_SELECTORS) {
-    const elements = root.querySelectorAll(selector);
-    for (const el of elements) {
+    // Strategy 1: Kingdom viewer elements (most reliable)
+    // dominion.games uses .kingdom-viewer-group containing .full-card-name.card-name
+    const kingdomNames = root.querySelectorAll(
+      '.kingdom-viewer-group .full-card-name.card-name'
+    );
+    for (const el of kingdomNames) {
       const text = el.textContent.trim();
       if (ALL_CARD_NAMES.has(text)) {
         found.add(text);
       }
     }
-  }
 
-  // Strategy 2: If selectors fail, scan all text nodes for card names
-  // This is slower but more resilient to DOM changes
-  if (found.size === 0) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      const text = walker.currentNode.textContent.trim();
+    // Also check landscape cards (Events, Projects, Ways, etc.)
+    const landscapes = root.querySelectorAll(
+      '.landscape-name:not(.unselectable)'
+    );
+    for (const el of landscapes) {
+      const text = el.textContent.trim();
       if (ALL_CARD_NAMES.has(text)) {
         found.add(text);
       }
     }
-  }
 
-  return [...found];
-}
+    if (found.size >= 10) return [...found];
 
-export function observeKingdom(callback) {
-  let debounceTimer = null;
-
-  const observer = new MutationObserver(() => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      const cards = extractCardNames(document.body);
-      if (cards.length >= 10) {
-        callback(cards);
+    // Strategy 2: Extract card names from onmousedown="publicStudyRequest" attributes
+    // These are the most reliable programmatic source of card names
+    const spans = root.querySelectorAll('span[onmousedown*="publicStudyRequest"]');
+    for (const span of spans) {
+      const mousedown = span.getAttribute('onmousedown') || '';
+      const match = mousedown.match(/publicStudyRequest\(event,\s*'([^']+)'\)/);
+      if (match && ALL_CARD_NAMES.has(match[1])) {
+        found.add(match[1]);
       }
-    }, 500);
-  });
+    }
 
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  });
+    if (found.size >= 10) return [...found];
 
-  // Also check immediately in case the page is already loaded
-  const cards = extractCardNames(document.body);
-  if (cards.length >= 10) {
-    callback(cards);
+    // Strategy 3: Broader selector search (fallback)
+    const fallbackSelectors = ['.supply-card', '.card-name', '.name-layer'];
+    for (const selector of fallbackSelectors) {
+      const elements = root.querySelectorAll(selector);
+      for (const el of elements) {
+        const text = el.textContent.trim();
+        if (ALL_CARD_NAMES.has(text)) {
+          found.add(text);
+        }
+      }
+    }
+
+    return [...found];
   }
-}
+
+  function observeKingdom(callback) {
+    let debounceTimer = null;
+
+    const observer = new MutationObserver(() => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        const cards = extractCardNames(document.body);
+        if (cards.length >= 10) {
+          callback(cards);
+        }
+      }, 500);
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    // Also check immediately in case the page is already loaded
+    const cards = extractCardNames(document.body);
+    if (cards.length >= 10) {
+      callback(cards);
+    }
+  }
+
+  DH.observeKingdom = observeKingdom;
+})();

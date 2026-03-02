@@ -1,28 +1,31 @@
 // Dominion Helper - Content Script
 // Injected into dominion.games to detect kingdom cards and display analysis
+// All dependencies are loaded via manifest.json content_scripts in order.
 
-import { observeKingdom } from './observer.js';
-import { renderOverlay } from './ui.js';
+(function () {
+  'use strict';
 
-let currentKingdom = [];
+  const DH = window.DominionHelper;
+  let currentKingdom = [];
 
-function onKingdomDetected(cardNames) {
-  if (arraysEqual(cardNames, currentKingdom)) return;
-  currentKingdom = cardNames;
+  function arraysEqual(a, b) {
+    if (a.length !== b.length) return false;
+    const sortedA = [...a].sort();
+    const sortedB = [...b].sort();
+    return sortedA.every((v, i) => v === sortedB[i]);
+  }
 
-  chrome.runtime.sendMessage({
-    type: 'KINGDOM_DETECTED',
-    cards: cardNames,
-  });
+  function onKingdomDetected(cardNames) {
+    if (arraysEqual(cardNames, currentKingdom)) return;
+    currentKingdom = cardNames;
 
-  renderOverlay(cardNames);
-}
+    chrome.runtime.sendMessage({
+      type: 'KINGDOM_DETECTED',
+      cards: cardNames,
+    });
 
-function arraysEqual(a, b) {
-  if (a.length !== b.length) return false;
-  const sortedA = [...a].sort();
-  const sortedB = [...b].sort();
-  return sortedA.every((v, i) => v === sortedB[i]);
-}
+    DH.renderOverlay(cardNames);
+  }
 
-observeKingdom(onKingdomDetected);
+  DH.observeKingdom(onKingdomDetected);
+})();
