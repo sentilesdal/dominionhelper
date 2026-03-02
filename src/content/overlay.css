@@ -1,0 +1,86 @@
+/* Dominion Helper - Overlay Panel Styles */
+
+#dominion-helper-panel {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  width: 280px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: rgba(20, 20, 30, 0.92);
+  color: #e0e0e0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 99999;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dh-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(40, 40, 60, 0.95);
+  border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: move;
+}
+
+.dh-title {
+  font-weight: 700;
+  font-size: 13px;
+  color: #ffd700;
+}
+
+.dh-toggle {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+}
+
+.dh-toggle:hover {
+  color: #fff;
+}
+
+.dh-body {
+  padding: 8px 12px;
+}
+
+.dh-body.dh-collapsed {
+  display: none;
+}
+
+.dh-section {
+  margin-bottom: 10px;
+}
+
+.dh-section-title {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.dh-components .dh-section-title { color: #64b5f6; }
+.dh-synergies .dh-section-title { color: #81c784; }
+.dh-archetypes .dh-section-title { color: #ffb74d; }
+.dh-notes .dh-section-title { color: #ef5350; }
+
+.dh-item {
+  padding: 3px 0;
+  line-height: 1.4;
+  color: #ccc;
+}
+
+.dh-components .dh-item::before { content: "\25cf "; color: #64b5f6; }
+.dh-synergies .dh-item::before { content: "\26a1 "; }
+.dh-archetypes .dh-item::before { content: "\25b6 "; color: #ffb74d; }
+.dh-notes .dh-item::before { content: "\26a0 "; color: #ef5350; }

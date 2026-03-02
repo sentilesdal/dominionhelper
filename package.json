@@ -1,0 +1,13 @@
+{
+  "name": "dominionhelper",
+  "version": "0.1.0",
+  "description": "Chrome extension that analyzes Dominion Online kingdoms for synergies and strategy",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}
