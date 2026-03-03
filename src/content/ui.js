@@ -50,6 +50,23 @@
       <div class="dh-body" id="dh-body">
     `;
 
+    // Show detected kingdom cards
+    if (analysis.kingdom && analysis.kingdom.length > 0) {
+      html += renderSection(
+        'Detected Kingdom (' + analysis.kingdom.length + ' cards)',
+        [analysis.kingdom.join(', ')],
+        'dh-kingdom'
+      );
+    }
+
+    if (analysis.unknown && analysis.unknown.length > 0) {
+      html += renderSection(
+        'Not In Database (' + analysis.unknown.length + ')',
+        [analysis.unknown.join(', ')],
+        'dh-unknown'
+      );
+    }
+
     html += renderSection(
       'Kingdom Components',
       analysis.components,

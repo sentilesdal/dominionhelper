@@ -13,6 +13,19 @@
       synergies.push(
         `Engine core: ${tags.villages[0]} + ${tags.draw[0]} — chain actions and draw`
       );
+    } else if (tags.villagers && tags.villagers.length > 0 && tags.draw.length > 0) {
+      // Villager sources can substitute for villages in lighter engines
+      const pureVillagers = tags.villagers.filter(
+        (name) => !tags.villages.includes(name)
+      );
+      if (pureVillagers.length > 0) {
+        const drawPartner =
+          tags.draw.find((name) => !pureVillagers.includes(name)) ||
+          tags.draw[0];
+        synergies.push(
+          `Villager engine: ${pureVillagers[0]} + ${drawPartner} — spend Villagers for extra actions`
+        );
+      }
     }
 
     // Trasher + Curser = Curse defense
