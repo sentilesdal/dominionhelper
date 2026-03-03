@@ -42,6 +42,7 @@
       altVp: [],
       economy: [],
       sifters: [],
+      villagers: [],
     };
 
     for (const card of cards) {
@@ -65,6 +66,7 @@
       if (t.includes('economy')) tags.economy.push(card.name);
       if (t.includes('sifter') || t.includes('draw-to-x'))
         tags.sifters.push(card.name);
+      if (t.includes('villagers')) tags.villagers.push(card.name);
     }
 
     if (tags.villages.length > 0)
@@ -91,7 +93,17 @@
     const notes = [];
 
     if (tags.villages.length === 0) {
-      notes.push('No village — limited to one terminal action per turn');
+      // Check for villager sources that aren't already tagged as villages
+      const pureVillagers = tags.villagers.filter(
+        (name) => !tags.villages.includes(name)
+      );
+      if (pureVillagers.length > 0) {
+        notes.push(
+          `No village, but ${pureVillagers.join(', ')} provide${pureVillagers.length === 1 ? 's' : ''} Villagers for extra actions`
+        );
+      } else {
+        notes.push('No village — limited to one terminal action per turn');
+      }
     }
 
     if (tags.trashers.length === 0) {
@@ -128,13 +140,23 @@
     const CARD_MAP = buildCardMap(deps.cardData);
     const getCard = (name) => CARD_MAP.get(name);
 
-    const cards = cardNames.map(getCard).filter(Boolean);
-    const { components, tags } = classifyComponents(cards, getCard);
-    const synergies = deps.detectSynergies(cards, tags);
-    const archetypes = deps.detectArchetypes(cards, tags);
+    const known = [];
+    const unknown = [];
+    for (const name of cardNames) {
+      const card = getCard(name);
+      if (card) {
+        known.push(card);
+      } else {
+        unknown.push(name);
+      }
+    }
+
+    const { components, tags } = classifyComponents(known, getCard);
+    const synergies = deps.detectSynergies(known, tags);
+    const archetypes = deps.detectArchetypes(known, tags);
     const notes = generateNotes(tags, getCard);
 
-    return { components, synergies, archetypes, notes };
+    return { kingdom: cardNames, unknown, components, synergies, archetypes, notes };
   }
 
   if (typeof window !== 'undefined') {
