@@ -4,9 +4,7 @@
   "version": "0.1.0",
   "description": "Analyzes Dominion Online kingdoms for card synergies, strategy archetypes, and opening recommendations.",
   "permissions": ["storage"],
-  "host_permissions": [
-    "https://dominion.games/*"
-  ],
+  "host_permissions": ["https://dominion.games/*"],
   "content_scripts": [
     {
       "matches": ["https://dominion.games/*"],
