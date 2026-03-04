@@ -9,6 +9,7 @@
 //
 // @module ui
 
+import type { OpeningRecommendation } from "../types";
 import { analyzeKingdom } from "../analysis/engine";
 
 // DOM id for the overlay panel — used to find or create the element.
@@ -68,6 +69,43 @@ function renderSection(
   `;
 }
 
+// Renders the opening buys section showing recommended cards for each
+// starting split. Each split is shown as a subsection with the split name
+// (e.g., "5/2 Split") and a list of recommended cards with reasoning.
+// Returns empty string if there are no recommendations for either split.
+//
+// @param fiveTwo - Recommendations for the 5/2 split
+// @param fourThree - Recommendations for the 4/3 split
+// @returns HTML string for the openings section, or empty string if no recommendations
+function renderOpenings(
+  fiveTwo: OpeningRecommendation[],
+  fourThree: OpeningRecommendation[],
+): string {
+  if (fiveTwo.length === 0 && fourThree.length === 0) return "";
+
+  let html = `
+    <div class="dh-section dh-openings">
+      <div class="dh-section-title">Opening Buys</div>
+  `;
+
+  if (fourThree.length > 0) {
+    html += `<div class="dh-opening-split">4/3 Split (83%)</div>`;
+    for (const rec of fourThree) {
+      html += `<div class="dh-item"><strong>${escapeHtml(rec.cardName)}</strong> ($${rec.cost}) — ${escapeHtml(rec.reasoning)}</div>`;
+    }
+  }
+
+  if (fiveTwo.length > 0) {
+    html += `<div class="dh-opening-split">5/2 Split (17%)</div>`;
+    for (const rec of fiveTwo) {
+      html += `<div class="dh-item"><strong>${escapeHtml(rec.cardName)}</strong> ($${rec.cost}) — ${escapeHtml(rec.reasoning)}</div>`;
+    }
+  }
+
+  html += "</div>";
+  return html;
+}
+
 // Runs the analysis engine on the detected card names and renders the
 // results into the overlay panel. Replaces the panel's innerHTML entirely
 // on each call (triggered when a new kingdom is detected).
@@ -78,6 +116,7 @@ function renderSection(
 // - Kingdom Components: functional role classifications
 // - Synergies: detected card synergies
 // - Viable Strategies: macro-strategy archetypes
+// - Opening Buys: recommended opening purchases for each split
 // - Key Notes: strategic warnings
 //
 // @param cardNames - Array of card name strings detected from the game UI
@@ -119,6 +158,10 @@ export function renderOverlay(cardNames: string[]): void {
     "Viable Strategies",
     analysis.archetypes,
     "dh-archetypes",
+  );
+  html += renderOpenings(
+    analysis.openings.fiveTwo,
+    analysis.openings.fourThree,
   );
   html += renderSection("Key Notes", analysis.notes, "dh-notes");
 

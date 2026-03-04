@@ -14,6 +14,7 @@ import type { Card, TagClassification, AnalysisResult } from "../types";
 import cardData from "../data/cards.json";
 import { detectSynergies } from "./synergies";
 import { detectArchetypes } from "./archetypes";
+import { analyzeOpenings } from "./openings";
 
 // Builds a lookup map from card name to Card object for O(1) access.
 //
@@ -194,6 +195,7 @@ export function analyzeKingdom(cardNames: string[]): AnalysisResult {
   const synergies = detectSynergies(known, tags);
   const archetypes = detectArchetypes(known, tags);
   const notes = generateNotes(tags, getCard);
+  const openings = analyzeOpenings(known);
 
   return {
     kingdom: cardNames,
@@ -202,5 +204,6 @@ export function analyzeKingdom(cardNames: string[]): AnalysisResult {
     synergies,
     archetypes,
     notes,
+    openings,
   };
 }

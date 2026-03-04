@@ -126,6 +126,27 @@ export interface TagClassification {
   villagers: string[];
 }
 
+// A single opening buy recommendation for a given cost point.
+// Produced by `analyzeOpenings` and displayed in the overlay panel.
+export interface OpeningRecommendation {
+  // The card being recommended (e.g., "Chapel", "Laboratory").
+  cardName: string;
+  // Coin cost of the card.
+  cost: number;
+  // Brief explanation of why this card is a good opening buy.
+  reasoning: string;
+}
+
+// Opening buy recommendations for both starting splits.
+// In Dominion, players draw 5 of their 10 starting cards (7 Coppers + 3 Estates)
+// on each of their first two turns, producing either $5/$2 (17%) or $4/$3 (83%).
+export interface OpeningAnalysis {
+  // Best cards to buy with a 5/2 starting split (first hand $5, second $2).
+  fiveTwo: OpeningRecommendation[];
+  // Best cards to buy with a 4/3 starting split (first hand $4, second $3).
+  fourThree: OpeningRecommendation[];
+}
+
 // Complete output of `analyzeKingdom`. Contains everything needed to
 // render the overlay panel: detected cards, unknowns, classified
 // components, synergies, viable strategies, and strategic warnings.
@@ -142,4 +163,6 @@ export interface AnalysisResult {
   archetypes: string[];
   // Strategic warnings (e.g., "No village — limited to one terminal").
   notes: string[];
+  // Recommended opening buys for each starting split (5/2 and 4/3).
+  openings: OpeningAnalysis;
 }

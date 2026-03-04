@@ -72,6 +72,7 @@
 .dh-components .dh-section-title { color: #64b5f6; }
 .dh-synergies .dh-section-title { color: #81c784; }
 .dh-archetypes .dh-section-title { color: #ffb74d; }
+.dh-openings .dh-section-title { color: #ce93d8; }
 .dh-notes .dh-section-title { color: #ef5350; }
 
 .dh-item {
@@ -83,4 +84,13 @@
 .dh-components .dh-item::before { content: "\25cf "; color: #64b5f6; }
 .dh-synergies .dh-item::before { content: "\26a1 "; }
 .dh-archetypes .dh-item::before { content: "\25b6 "; color: #ffb74d; }
+.dh-openings .dh-item::before { content: "\25b8 "; color: #ce93d8; }
 .dh-notes .dh-item::before { content: "\26a0 "; color: #ef5350; }
+
+.dh-opening-split {
+  font-weight: 600;
+  font-size: 11px;
+  color: #b39ddb;
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
