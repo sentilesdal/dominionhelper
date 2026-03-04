@@ -5,6 +5,7 @@ import {
   parseCardList,
   singularize,
   isGameStart,
+  stripAnnotations,
 } from "../src/tracker/log-parser";
 
 describe("singularize", () => {
@@ -199,5 +200,73 @@ describe("isGameStart", () => {
     expect(isGameStart("m plays a Silver.")).toBe(false);
     expect(isGameStart("Turn 1 - muddybrown")).toBe(false);
     expect(isGameStart("")).toBe(false);
+  });
+});
+
+describe("stripAnnotations", () => {
+  it("strips coin bonus annotations", () => {
+    expect(stripAnnotations("m plays Vassal. (+$2)")).toBe("m plays Vassal.");
+  });
+
+  it("strips card source annotations", () => {
+    expect(stripAnnotations("m draws a Copper. (Vassal)")).toBe(
+      "m draws a Copper.",
+    );
+  });
+
+  it("strips multi-coin bonus annotations", () => {
+    expect(
+      stripAnnotations("m plays Copper, Copper and Silver. (+$4)"),
+    ).toBe("m plays Copper, Copper and Silver.");
+  });
+
+  it("strips buy bonus annotations", () => {
+    expect(stripAnnotations("m plays Market. (+1 Buy)")).toBe(
+      "m plays Market.",
+    );
+  });
+
+  it("strips card bonus annotations", () => {
+    expect(stripAnnotations("m plays Laboratory. (+2 Cards)")).toBe(
+      "m plays Laboratory.",
+    );
+  });
+
+  it("strips multiple annotations", () => {
+    expect(stripAnnotations("m plays Hireling. (+$1) (Hireling)")).toBe(
+      "m plays Hireling.",
+    );
+  });
+
+  it("preserves lines with no annotations", () => {
+    expect(stripAnnotations("m plays a Silver.")).toBe("m plays a Silver.");
+  });
+
+  it("preserves empty strings", () => {
+    expect(stripAnnotations("")).toBe("");
+  });
+});
+
+describe("parseLogLine with annotations", () => {
+  it("parses plays with coin bonus annotation", () => {
+    const result = parseLogLine("m plays Vassal. (+$2)");
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("plays");
+    expect(result!.cards).toEqual(["Vassal"]);
+  });
+
+  it("parses draws with card source annotation", () => {
+    const result = parseLogLine("m draws a Copper. (Vassal)");
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("draws");
+    expect(result!.cards).toEqual(["Copper"]);
+  });
+
+  it("parses multi-card plays with coin annotation", () => {
+    const result = parseLogLine("m plays Copper, Copper and Silver. (+$4)");
+    expect(result).not.toBeNull();
+    expect(result!.action).toBe("plays");
+    expect(result!.cards).toEqual(["Copper", "Copper", "Silver"]);
+    expect(result!.counts).toEqual([1, 1, 1]);
   });
 });

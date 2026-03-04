@@ -4,7 +4,8 @@
 // LogEntry objects. The game log uses abbreviated player names and a
 // consistent grammar for card actions (plays, buys, draws, etc.).
 //
-// Key exports: parseLogLine, parseTurnMarker, parseCardList, isGameStart
+// Key exports: parseLogLine, parseTurnMarker, parseCardList, isGameStart,
+//   stripAnnotations
 //
 // @module log-parser
 
@@ -147,14 +148,45 @@ export function parseCardList(text: string): {
   return { cards, counts };
 }
 
+// Matches trailing parenthetical annotations the game log appends to lines:
+//   " (+$4)"     — inline coin bonus from playing treasures
+//   " (Vassal)"  — card source for triggered effects (e.g., "draws a Copper. (Vassal)")
+//   " (+1 Buy)"  — bonus buy annotations
+//   " (+2 Cards)" — bonus card annotations
+// These annotations break our regex patterns because they appear after the
+// terminal period. We strip them before parsing.
+const ANNOTATION_RE = /\s+\([^)]+\)$/;
+
+// Strips trailing parenthetical annotations from a game log line.
+// The dominion.games log appends bonus/source annotations after the period:
+//   "m plays Vassal. (+$2)" → "m plays Vassal."
+//   "m draws a Copper. (Vassal)" → "m draws a Copper."
+//   "m plays Copper, Copper and Silver. (+$4)" → "m plays Copper, Copper and Silver."
+//
+// Multiple annotations can appear; this function strips all of them.
+//
+// @param text - Raw log line text
+// @returns The line with trailing annotations removed
+export function stripAnnotations(text: string): string {
+  let result = text;
+  // Repeatedly strip trailing annotations (some lines have multiple)
+  while (ANNOTATION_RE.test(result)) {
+    result = result.replace(ANNOTATION_RE, "");
+  }
+  return result;
+}
+
 // Parses a single game log line into a structured LogEntry.
 // Returns null for lines that don't match any known action pattern
 // (e.g., decorative lines, chat messages, or unknown formats).
 //
+// Strips parenthetical annotations before matching so that lines like
+// "m plays Vassal. (+$2)" are correctly parsed.
+//
 // @param text - A single line of text from the game log
 // @returns Parsed LogEntry or null if the line doesn't match a known pattern
 export function parseLogLine(text: string): LogEntry | null {
-  const trimmed = text.trim();
+  const trimmed = stripAnnotations(text.trim());
   if (!trimmed) return null;
 
   for (const [pattern, action] of ACTION_PATTERNS) {

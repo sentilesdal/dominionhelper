@@ -167,6 +167,37 @@ export interface AnalysisResult {
   openings: OpeningAnalysis;
 }
 
+// ─── Angular Bridge Types ─────────────────────────────────────────────
+//
+// Types for snapshots dispatched by the MAIN-world bridge script that
+// reads Angular game state. These provide ground-truth zone counts and
+// visible card lists that the content script uses to correct log-based tracking.
+
+// Snapshot of a single zone from Angular game state.
+// Visible zones (hand, play, trash) include card names; hidden zones
+// (draw, discard) provide only a count.
+export interface ZoneSnapshot {
+  zoneName: string;
+  cards: string[];
+  count: number;
+}
+
+// Snapshot of a single player from Angular game state.
+// The isMe flag identifies the local player; initials match the log abbreviation.
+export interface PlayerSnapshot {
+  name: string;
+  initials: string;
+  isMe: boolean;
+  zones: ZoneSnapshot[];
+}
+
+// Complete game state snapshot dispatched by the bridge as a CustomEvent.
+// Produced every 500ms when Angular state changes.
+export interface GameStateSnapshot {
+  players: PlayerSnapshot[];
+  turnNumber: number;
+}
+
 // ─── Deck Tracker Types ────────────────────────────────────────────────
 //
 // Types for the real-time deck tracker that parses game log entries,
