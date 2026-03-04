@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { Card, LogEntry } from "../src/types";
+import type { Card, GameStateSnapshot, LogEntry } from "../src/types";
 import {
   createGameState,
   createPlayerZones,
@@ -8,6 +8,9 @@ import {
   resetGameState,
   getAllOwnedCards,
   deriveAbbrev,
+  applySnapshot,
+  inferDrawPile,
+  buildHybridZones,
 } from "../src/tracker/deck-state";
 
 // Helper to build a minimal Card object for testing
@@ -302,5 +305,324 @@ describe("getAllOwnedCards", () => {
     const zones = createPlayerZones();
     const owned = getAllOwnedCards(zones);
     expect(owned.size).toBe(0);
+  });
+});
+
+// Helper to build an Angular snapshot for testing
+function makeSnapshot(
+  players: {
+    name: string;
+    initials: string;
+    isMe: boolean;
+    zones: { zoneName: string; cards: string[]; count: number }[];
+  }[],
+  turnNumber = 1,
+): GameStateSnapshot {
+  return { players, turnNumber };
+}
+
+describe("applySnapshot", () => {
+  it("sets localPlayer from isMe flag", () => {
+    const state = createGameState();
+    const snapshot = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [],
+      },
+    ]);
+
+    applySnapshot(state, snapshot);
+
+    expect(state.localPlayer).toBe("m");
+  });
+
+  it("overwrites hand zone with exact Angular data", () => {
+    const state = createGameState();
+    // Set up log-based hand data
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+    processLogEntry(state, makeEntry("m", "draws", ["Copper"], [5]));
+
+    const snapshot = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          { zoneName: "HandZone", cards: ["Copper", "Copper", "Copper", "Silver", "Estate"], count: 5 },
+        ],
+      },
+    ]);
+
+    applySnapshot(state, snapshot);
+
+    const zones = state.players.get("m")!;
+    expect(zones.hand.get("Copper")).toBe(3);
+    expect(zones.hand.get("Silver")).toBe(1);
+    expect(zones.hand.get("Estate")).toBe(1);
+  });
+
+  it("overwrites play zone with exact Angular data", () => {
+    const state = createGameState();
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+
+    const snapshot = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          { zoneName: "InPlayZone", cards: ["Village", "Smithy"], count: 2 },
+        ],
+      },
+    ]);
+
+    applySnapshot(state, snapshot);
+
+    const zones = state.players.get("m")!;
+    expect(zones.play.get("Village")).toBe(1);
+    expect(zones.play.get("Smithy")).toBe(1);
+  });
+
+  it("updates turn number from snapshot", () => {
+    const state = createGameState();
+    const snapshot = makeSnapshot(
+      [{ name: "muddybrown", initials: "m", isMe: true, zones: [] }],
+      5,
+    );
+
+    applySnapshot(state, snapshot);
+
+    expect(state.currentTurn).toBe(5);
+  });
+
+  it("registers player name mapping", () => {
+    const state = createGameState();
+    const snapshot = makeSnapshot([
+      { name: "muddybrown", initials: "m", isMe: true, zones: [] },
+      { name: "opponent42", initials: "o", isMe: false, zones: [] },
+    ]);
+
+    applySnapshot(state, snapshot);
+
+    expect(state.playerNames.get("m")).toBe("muddybrown");
+    expect(state.playerNames.get("o")).toBe("opponent42");
+  });
+
+  it("uses existing abbreviation when player name already mapped", () => {
+    const state = createGameState();
+    // Pre-populate from log processing
+    state.playerNames.set("m", "muddybrown");
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+
+    const snapshot = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          { zoneName: "HandZone", cards: ["Copper", "Copper"], count: 2 },
+        ],
+      },
+    ]);
+
+    applySnapshot(state, snapshot);
+
+    // Should use existing "m" abbreviation, not create a new one
+    expect(state.players.has("m")).toBe(true);
+    expect(state.players.get("m")!.hand.get("Copper")).toBe(2);
+  });
+});
+
+describe("inferDrawPile", () => {
+  it("computes deck pool by subtracting hand and play from owned", () => {
+    const allOwned = new Map([
+      ["Copper", 7],
+      ["Estate", 3],
+      ["Silver", 1],
+    ]);
+    const hand = new Map([
+      ["Copper", 3],
+      ["Estate", 2],
+    ]);
+    const play = new Map([["Silver", 1]]);
+
+    const result = inferDrawPile(allOwned, hand, play, 4, 1);
+
+    // 7 - 3 = 4 Coppers, 3 - 2 = 1 Estate, 1 - 1 = 0 Silver in pool
+    expect(result.deckPool.get("Copper")).toBe(4);
+    expect(result.deckPool.get("Estate")).toBe(1);
+    expect(result.deckPool.has("Silver")).toBe(false);
+    expect(result.deckCount).toBe(4);
+    expect(result.discardCount).toBe(1);
+  });
+
+  it("handles empty hand and play", () => {
+    const allOwned = new Map([["Copper", 7]]);
+    const hand = new Map<string, number>();
+    const play = new Map<string, number>();
+
+    const result = inferDrawPile(allOwned, hand, play, 7, 0);
+
+    expect(result.deckPool.get("Copper")).toBe(7);
+    expect(result.deckCount).toBe(7);
+    expect(result.discardCount).toBe(0);
+  });
+
+  it("handles cards fully accounted for in hand/play", () => {
+    const allOwned = new Map([["Copper", 3]]);
+    const hand = new Map([["Copper", 3]]);
+    const play = new Map<string, number>();
+
+    const result = inferDrawPile(allOwned, hand, play, 0, 0);
+
+    expect(result.deckPool.has("Copper")).toBe(false);
+    expect(result.deckCount).toBe(0);
+  });
+
+  it("does not go negative when hand exceeds owned", () => {
+    const allOwned = new Map([["Copper", 2]]);
+    const hand = new Map([["Copper", 5]]);
+    const play = new Map<string, number>();
+
+    const result = inferDrawPile(allOwned, hand, play, 0, 0);
+
+    // Should clamp to zero, not go negative
+    expect(result.deckPool.has("Copper")).toBe(false);
+  });
+});
+
+describe("buildHybridZones", () => {
+  it("produces hand and play from Angular data", () => {
+    const state = createGameState();
+    // Log-based setup: player owns 7 Coppers and 3 Estates
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+    processLogEntry(state, makeEntry("m", "starts-with", ["Estate"], [3]));
+    state.playerNames.set("m", "muddybrown");
+
+    const snapshot = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          { zoneName: "HandZone", cards: ["Copper", "Copper", "Copper", "Estate", "Estate"], count: 5 },
+          { zoneName: "InPlayZone", cards: [], count: 0 },
+          { zoneName: "DrawZone", cards: [], count: 5 },
+          { zoneName: "DiscardZone", cards: [], count: 0 },
+          { zoneName: "TrashZone", cards: [], count: 0 },
+        ],
+      },
+    ]);
+
+    const hybrid = buildHybridZones(state, snapshot);
+    const zones = hybrid.get("m")!;
+
+    // Hand should match Angular exactly
+    expect(zones.hand.get("Copper")).toBe(3);
+    expect(zones.hand.get("Estate")).toBe(2);
+
+    // Draw pile should contain remaining 4 Coppers and 1 Estate
+    expect(zones.deck.get("Copper")).toBe(4);
+    expect(zones.deck.get("Estate")).toBe(1);
+  });
+
+  it("puts all pool cards in deck when discard is empty", () => {
+    const state = createGameState();
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+    state.playerNames.set("m", "muddybrown");
+
+    const snapshot = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          { zoneName: "HandZone", cards: ["Copper", "Copper"], count: 2 },
+          { zoneName: "InPlayZone", cards: [], count: 0 },
+          { zoneName: "DrawZone", cards: [], count: 5 },
+          { zoneName: "DiscardZone", cards: [], count: 0 },
+          { zoneName: "TrashZone", cards: [], count: 0 },
+        ],
+      },
+    ]);
+
+    const hybrid = buildHybridZones(state, snapshot);
+    const zones = hybrid.get("m")!;
+
+    // All 5 remaining Coppers should be in deck (discard is empty)
+    expect(zones.deck.get("Copper")).toBe(5);
+    expect(zones.discard.size).toBe(0);
+  });
+
+  it("includes trash from Angular", () => {
+    const state = createGameState();
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+    processLogEntry(state, makeEntry("m", "starts-with", ["Estate"], [3]));
+    processLogEntry(state, makeEntry("m", "trashes", ["Estate"], [2]));
+    state.playerNames.set("m", "muddybrown");
+
+    const snapshot = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          { zoneName: "HandZone", cards: [], count: 0 },
+          { zoneName: "InPlayZone", cards: [], count: 0 },
+          { zoneName: "DrawZone", cards: [], count: 8 },
+          { zoneName: "DiscardZone", cards: [], count: 0 },
+          { zoneName: "TrashZone", cards: ["Estate", "Estate"], count: 2 },
+        ],
+      },
+    ]);
+
+    const hybrid = buildHybridZones(state, snapshot);
+    const zones = hybrid.get("m")!;
+
+    expect(zones.trash.get("Estate")).toBe(2);
+  });
+
+  it("handles multiple players", () => {
+    const state = createGameState();
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+    processLogEntry(state, makeEntry("o", "starts-with", ["Copper"], [7]));
+    state.playerNames.set("m", "muddybrown");
+    state.playerNames.set("o", "opponent42");
+
+    const snapshot = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          { zoneName: "HandZone", cards: ["Copper", "Copper"], count: 2 },
+          { zoneName: "InPlayZone", cards: [], count: 0 },
+          { zoneName: "DrawZone", cards: [], count: 5 },
+          { zoneName: "DiscardZone", cards: [], count: 0 },
+          { zoneName: "TrashZone", cards: [], count: 0 },
+        ],
+      },
+      {
+        name: "opponent42",
+        initials: "o",
+        isMe: false,
+        zones: [
+          { zoneName: "HandZone", cards: ["Copper", "Copper", "Copper"], count: 3 },
+          { zoneName: "InPlayZone", cards: [], count: 0 },
+          { zoneName: "DrawZone", cards: [], count: 4 },
+          { zoneName: "DiscardZone", cards: [], count: 0 },
+          { zoneName: "TrashZone", cards: [], count: 0 },
+        ],
+      },
+    ]);
+
+    const hybrid = buildHybridZones(state, snapshot);
+
+    expect(hybrid.get("m")!.hand.get("Copper")).toBe(2);
+    expect(hybrid.get("m")!.deck.get("Copper")).toBe(5);
+    expect(hybrid.get("o")!.hand.get("Copper")).toBe(3);
+    expect(hybrid.get("o")!.deck.get("Copper")).toBe(4);
   });
 });

@@ -14,7 +14,8 @@
 // - topdecks:   hand → deck
 // - starts-with: (new card) → deck
 //
-// Key exports: createGameState, processLogEntry, processTurnChange
+// Key exports: createGameState, processLogEntry, processTurnChange,
+//   applySnapshot, inferDrawPile, buildHybridZones
 //
 // @module deck-state
 
@@ -22,7 +23,9 @@ import type {
   Card,
   CardZone,
   GameState,
+  GameStateSnapshot,
   LogEntry,
+  PlayerSnapshot,
   PlayerZones,
 } from "../types";
 
@@ -338,4 +341,238 @@ export function getAllOwnedCards(zones: PlayerZones): Map<string, number> {
   }
 
   return owned;
+}
+
+// ─── Hybrid Angular Bridge Functions ──────────────────────────────────
+//
+// These functions merge Angular game state snapshots (ground truth for
+// zone counts and visible cards) with log-based ownership tracking to
+// produce accurate deck composition.
+
+// Maps Angular zone names to our internal CardZone type.
+// Angular uses "HandZone", "DrawZone", etc. while we use "hand", "deck", etc.
+const ANGULAR_ZONE_MAP: Record<string, CardZone> = {
+  HandZone: "hand",
+  InPlayZone: "play",
+  DrawZone: "deck",
+  DiscardZone: "discard",
+  TrashZone: "trash",
+};
+
+// Applies an Angular game state snapshot to the existing game state.
+// Updates localPlayer, player name mappings, and overwrites hand/play zones
+// with exact card lists from Angular (ground truth). Also stores deck and
+// discard counts for use by inferDrawPile.
+//
+// This function is called every time the bridge dispatches a state change event.
+// It does NOT rebuild the deck/discard contents — that's done by buildHybridZones.
+//
+// @param state - Current game state (mutated in place)
+// @param snapshot - Angular game state snapshot from the bridge
+// @returns The updated game state
+export function applySnapshot(
+  state: GameState,
+  snapshot: GameStateSnapshot,
+): GameState {
+  state.currentTurn = snapshot.turnNumber;
+
+  for (const player of snapshot.players) {
+    // Find or create the abbreviation mapping for this player
+    const abbrev = findAbbrevForPlayer(player, state);
+
+    if (player.isMe) {
+      state.localPlayer = abbrev;
+    }
+
+    const zones = ensurePlayer(state, abbrev);
+
+    for (const zone of player.zones) {
+      const ourZone = ANGULAR_ZONE_MAP[zone.zoneName];
+      if (!ourZone) continue;
+
+      // For visible zones (hand, play, trash), overwrite with exact card lists
+      if (ourZone === "hand" || ourZone === "play" || ourZone === "trash") {
+        zones[ourZone].clear();
+        for (const card of zone.cards) {
+          addToZone(zones[ourZone], card, 1);
+        }
+      }
+      // For deck and discard, store the count but don't change card-level data
+      // (we don't know which specific cards are in the draw pile or discard)
+    }
+  }
+
+  return state;
+}
+
+// Finds the abbreviation for a player from the Angular snapshot.
+// First checks if we already have a mapping for this player's full name.
+// Otherwise, tries matching by initials (which correspond to the log abbreviation).
+//
+// @param player - Player snapshot from Angular
+// @param state - Current game state with existing name mappings
+// @returns The abbreviation string used in our state maps
+function findAbbrevForPlayer(
+  player: PlayerSnapshot,
+  state: GameState,
+): string {
+  // Check if we already have a mapping by full name
+  for (const [abbrev, name] of state.playerNames) {
+    if (name === player.name) return abbrev;
+  }
+
+  // Angular's initials field matches the log abbreviation in most cases
+  const initials = player.initials.toLowerCase();
+
+  // Register the mapping and ensure zones exist
+  state.playerNames.set(initials, player.name);
+  return initials;
+}
+
+// Gets the count for a specific Angular zone from a player snapshot.
+//
+// @param player - Player snapshot from Angular
+// @param zoneName - Angular zone name (e.g., "DrawZone", "DiscardZone")
+// @returns Card count in that zone, or 0 if zone not found
+function getAngularZoneCount(
+  player: PlayerSnapshot,
+  zoneName: string,
+): number {
+  const zone = player.zones.find((z) => z.zoneName === zoneName);
+  return zone ? zone.count : 0;
+}
+
+// Infers the draw pile composition using ownership tracking and Angular zone data.
+//
+// The key insight: we track all cards a player has ever gained (from logs) and
+// all cards they've trashed. The difference is total owned cards. Angular tells
+// us exactly what's in hand and play. So:
+//   deckPool = totalOwned - hand - play
+//   deckPool splits into deck (deckCount) and discard (discardCount) from Angular
+//
+// When discard is empty (right after a shuffle), ALL deckPool cards are in the
+// draw pile — this is the most accurate moment for draw probability calculation.
+//
+// @param allOwned - Total cards owned by the player (from log tracking)
+// @param hand - Exact hand contents (from Angular)
+// @param play - Exact play area contents (from Angular)
+// @param deckCount - Number of cards in draw pile (from Angular)
+// @param discardCount - Number of cards in discard pile (from Angular)
+// @returns Object with deckPool (cards in deck+discard), deckCount, and discardCount
+export function inferDrawPile(
+  allOwned: Map<string, number>,
+  hand: Map<string, number>,
+  play: Map<string, number>,
+  deckCount: number,
+  discardCount: number,
+): { deckPool: Map<string, number>; deckCount: number; discardCount: number } {
+  // Start with all owned cards
+  const deckPool = new Map<string, number>();
+  for (const [card, count] of allOwned) {
+    deckPool.set(card, count);
+  }
+
+  // Subtract hand cards (exact from Angular)
+  for (const [card, count] of hand) {
+    const current = deckPool.get(card) || 0;
+    const remaining = current - count;
+    if (remaining <= 0) {
+      deckPool.delete(card);
+    } else {
+      deckPool.set(card, remaining);
+    }
+  }
+
+  // Subtract play area cards (exact from Angular)
+  for (const [card, count] of play) {
+    const current = deckPool.get(card) || 0;
+    const remaining = current - count;
+    if (remaining <= 0) {
+      deckPool.delete(card);
+    } else {
+      deckPool.set(card, remaining);
+    }
+  }
+
+  return { deckPool, deckCount, discardCount };
+}
+
+// Builds hybrid PlayerZones by combining Angular snapshot data with log-based
+// ownership tracking. This produces the most accurate possible zone state:
+// - hand and play: exact cards from Angular (ground truth)
+// - trash: exact cards from Angular (ground truth)
+// - deck + discard pool: inferred from total owned minus hand minus play
+// - deck/discard split: count from Angular, card composition inferred
+//
+// @param state - Current game state with log-based ownership data
+// @param snapshot - Angular game state snapshot
+// @returns Map of abbreviation to hybrid PlayerZones for each player
+export function buildHybridZones(
+  state: GameState,
+  snapshot: GameStateSnapshot,
+): Map<string, PlayerZones> {
+  const result = new Map<string, PlayerZones>();
+
+  for (const player of snapshot.players) {
+    const abbrev = findAbbrevForPlayer(player, state);
+    const logZones = state.players.get(abbrev);
+    if (!logZones) continue;
+
+    // Get exact cards from Angular for visible zones
+    const hybrid = createPlayerZones();
+
+    // Hand — exact from Angular
+    const handZone = player.zones.find((z) => z.zoneName === "HandZone");
+    if (handZone) {
+      for (const card of handZone.cards) {
+        addToZone(hybrid.hand, card, 1);
+      }
+    }
+
+    // Play — exact from Angular
+    const playZone = player.zones.find((z) => z.zoneName === "InPlayZone");
+    if (playZone) {
+      for (const card of playZone.cards) {
+        addToZone(hybrid.play, card, 1);
+      }
+    }
+
+    // Trash — exact from Angular
+    const trashZone = player.zones.find((z) => z.zoneName === "TrashZone");
+    if (trashZone) {
+      for (const card of trashZone.cards) {
+        addToZone(hybrid.trash, card, 1);
+      }
+    }
+
+    // Infer deck + discard from ownership tracking
+    const allOwned = getAllOwnedCards(logZones);
+    const deckCount = getAngularZoneCount(player, "DrawZone");
+    const discardCount = getAngularZoneCount(player, "DiscardZone");
+
+    const { deckPool } = inferDrawPile(
+      allOwned,
+      hybrid.hand,
+      hybrid.play,
+      deckCount,
+      discardCount,
+    );
+
+    // When discard is empty, all pool cards are in the draw pile
+    if (discardCount === 0) {
+      for (const [card, count] of deckPool) {
+        addToZone(hybrid.deck, card, count);
+      }
+    } else {
+      // We know the counts but not exact split — put all in deck as best guess
+      // The deckCount and discardCount from Angular are still available for stats
+      for (const [card, count] of deckPool) {
+        addToZone(hybrid.deck, card, count);
+      }
+    }
+
+    result.set(abbrev, hybrid);
+  }
+
+  return result;
 }

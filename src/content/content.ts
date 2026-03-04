@@ -1,7 +1,7 @@
 // Dominion Helper — Content Script Entry Point
 //
 // This is the main entry point injected into dominion.games by the Chrome
-// extension. It wires two systems:
+// extension. It wires three systems:
 //
 // 1. Kingdom analysis: DOM observer detects kingdom cards → analysis engine
 //    produces strategic advice → rendered in the right-side overlay panel.
@@ -11,11 +11,16 @@
 //    calculator produces composition/probabilities → rendered in the
 //    left-side tracker panel.
 //
+// 3. Angular bridge: A MAIN-world script polls Angular game state and
+//    dispatches CustomEvents. This content script (ISOLATED world) listens
+//    for those events and uses applySnapshot to correct zone data with
+//    ground-truth hand/play/count information from Angular.
+//
 // Vite bundles this file and all its transitive imports into `dist/content.js`.
 //
 // @module content
 
-import type { Card } from "../types";
+import type { Card, GameStateSnapshot } from "../types";
 import { observeKingdom } from "./observer";
 import { renderOverlay } from "./ui";
 import { observeGameLog } from "./log-observer";
@@ -29,6 +34,7 @@ import {
   processLogEntry,
   processTurnChange,
   resetGameState,
+  applySnapshot,
 } from "../tracker/deck-state";
 import { renderTrackerPanel } from "../tracker/tracker-ui";
 import cardData from "../data/cards.json";
@@ -83,8 +89,15 @@ observeKingdom(onKingdomDetected);
 // Mutable game state tracking card zones for all players
 let gameState = createGameState();
 
+// Tracks whether the Angular bridge is active. When true, we have ground-truth
+// zone data and log parsing only needs to track ownership changes.
+let bridgeActive = false;
+
 // Callback invoked by the log observer when new log lines appear.
 // Parses each line, processes card movements, and re-renders the tracker.
+// When the bridge is active, all log actions are still processed to maintain
+// ownership tracking (gains, trashes, starts-with), which is needed for
+// inferring draw pile composition.
 //
 // @param lines - Array of new log line strings from the game log DOM
 function onLogUpdate(lines: string[]): void {
@@ -95,6 +108,7 @@ function onLogUpdate(lines: string[]): void {
     // after the game has already begun (turn > 0)
     if (isGameStart(line) && gameState.currentTurn > 0) {
       gameState = resetGameState();
+      bridgeActive = false;
       changed = true;
     }
 
@@ -114,11 +128,30 @@ function onLogUpdate(lines: string[]): void {
     }
   }
 
-  // Only re-render if something actually changed
-  if (changed) {
+  // Only re-render if something actually changed and bridge isn't handling renders
+  // When bridge is active, it handles rendering on every snapshot update
+  if (changed && !bridgeActive) {
     renderTrackerPanel(gameState, CARD_DB);
   }
 }
 
 // Start observing the game log for card actions
 observeGameLog(onLogUpdate);
+
+// ─── Angular Bridge Integration ────────────────────────────────────────
+
+// Listen for game state snapshots from the MAIN-world bridge script.
+// The bridge polls Angular every 500ms and dispatches a CustomEvent only
+// when the state changes. We use this to apply ground-truth zone data.
+window.addEventListener("dominion-helper-game-state", (e: Event) => {
+  const snapshot = (e as CustomEvent).detail as GameStateSnapshot;
+
+  // Mark bridge as active on first snapshot — enables hybrid rendering
+  bridgeActive = true;
+
+  // Apply Angular's ground truth data to our game state
+  applySnapshot(gameState, snapshot);
+
+  // Re-render with the corrected state
+  renderTrackerPanel(gameState, CARD_DB);
+});

@@ -4,10 +4,11 @@
 // Chrome content scripts don't support ES modules, so each entry point
 // is bundled separately into IIFE format.
 //
-// Three builds are performed:
+// Four builds are performed:
 // 1. Content script — bundles all analysis + content modules + card data into one file
 // 2. Service worker — standalone background script
 // 3. Popup — standalone popup script
+// 4. Game state bridge — MAIN-world script that reads Angular game state
 //
 // After bundling, static assets (CSS, HTML, icons) are copied to dist/
 // and a new manifest.json is generated with dist-relative paths (single
@@ -29,7 +30,9 @@ const dist = resolve(root, "dist");
 //
 // @param {string} entry - Path to the TypeScript entry point (relative to project root)
 // @param {string} outFile - Output filename in the dist/ directory
-function chromeExtBuild(entry, outFile) {
+// @param {string} [iifeName] - IIFE global name (defaults to "DominionHelper").
+//   Each build needs a unique name to avoid conflicts when multiple scripts load.
+function chromeExtBuild(entry, outFile, iifeName = "DominionHelper") {
   return build({
     root,
     configFile: false,
@@ -39,7 +42,7 @@ function chromeExtBuild(entry, outFile) {
       lib: {
         entry,
         formats: ["iife"],
-        name: "DominionHelper",
+        name: iifeName,
         fileName: () => outFile,
       },
       rollupOptions: {
@@ -72,6 +75,15 @@ async function main() {
   console.log("Building popup script...");
   await chromeExtBuild("src/popup/popup.ts", "popup.js");
 
+  // Bridge runs in MAIN world to access Angular — needs a unique IIFE name
+  // to avoid colliding with the content script's "DominionHelper" global
+  console.log("Building game state bridge...");
+  await chromeExtBuild(
+    "src/content/game-state-bridge.ts",
+    "game-state-bridge.js",
+    "DominionHelperBridge",
+  );
+
   // Copy static assets that don't need bundling
   console.log("Copying static assets...");
   cpSync(resolve(root, "icons"), resolve(dist, "icons"), { recursive: true });
@@ -101,6 +113,12 @@ async function main() {
         js: ["content.js"],
         css: ["overlay.css"],
         run_at: "document_idle",
+      },
+      {
+        matches: srcManifest.content_scripts[0].matches,
+        js: ["game-state-bridge.js"],
+        run_at: "document_idle",
+        world: "MAIN",
       },
     ],
     background: {
