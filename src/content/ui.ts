@@ -3,7 +3,8 @@
 // Renders the analysis results as a floating overlay panel on the
 // dominion.games page. The panel shows detected kingdom cards, unknown
 // cards, component classifications, synergies, viable strategies, and
-// strategic warnings. Includes a collapse/expand toggle.
+// strategic warnings. Includes a collapse/expand toggle, collapsible
+// sections, and drag-to-move positioning.
 //
 // Styled by `overlay.css` which is injected as a content script stylesheet.
 //
@@ -14,6 +15,9 @@ import { analyzeKingdom } from "../analysis/engine";
 
 // DOM id for the overlay panel — used to find or create the element.
 const PANEL_ID = "dominion-helper-panel";
+
+// Counter for generating unique section IDs within a single render pass.
+let sectionIdCounter = 0;
 
 // Gets or creates the overlay panel element. The panel is appended to
 // `document.body` and persists across re-renders (innerHTML is replaced,
@@ -45,6 +49,7 @@ function escapeHtml(str: string): string {
 // Renders a collapsible section of the overlay panel with a title and
 // list of items. Returns empty string if items is empty/undefined,
 // allowing sections to be omitted entirely when there's nothing to show.
+// Each section title is clickable to toggle the content visibility.
 //
 // @param title - Section heading (e.g., "Synergies", "Key Notes")
 // @param items - Array of display strings for this section
@@ -57,14 +62,20 @@ function renderSection(
 ): string {
   if (!items || items.length === 0) return "";
 
+  const sectionId = `dh-sec-${sectionIdCounter++}`;
   const itemsHtml = items
     .map((item) => `<div class="dh-item">${escapeHtml(item)}</div>`)
     .join("");
 
   return `
     <div class="dh-section ${className}">
-      <div class="dh-section-title">${escapeHtml(title)}</div>
-      ${itemsHtml}
+      <div class="dh-section-title dh-collapsible" data-target="${sectionId}">
+        <span class="dh-collapse-arrow">&#9660;</span>
+        ${escapeHtml(title)}
+      </div>
+      <div class="dh-section-content" id="${sectionId}">
+        ${itemsHtml}
+      </div>
     </div>
   `;
 }
@@ -83,9 +94,14 @@ function renderOpenings(
 ): string {
   if (fiveTwo.length === 0 && fourThree.length === 0) return "";
 
+  const sectionId = `dh-sec-${sectionIdCounter++}`;
   let html = `
     <div class="dh-section dh-openings">
-      <div class="dh-section-title">Opening Buys</div>
+      <div class="dh-section-title dh-collapsible" data-target="${sectionId}">
+        <span class="dh-collapse-arrow">&#9660;</span>
+        Opening Buys
+      </div>
+      <div class="dh-section-content" id="${sectionId}">
   `;
 
   if (fourThree.length > 0) {
@@ -102,7 +118,7 @@ function renderOpenings(
     }
   }
 
-  html += "</div>";
+  html += "</div></div>";
   return html;
 }
 
@@ -124,8 +140,11 @@ export function renderOverlay(cardNames: string[]): void {
   const analysis = analyzeKingdom(cardNames);
   const panel = createPanel();
 
+  // Reset section counter so IDs are stable across re-renders
+  sectionIdCounter = 0;
+
   let html = `
-    <div class="dh-header">
+    <div class="dh-header" id="dh-header">
       <span class="dh-title">Dominion Helper</span>
       <button class="dh-toggle" id="dh-toggle-btn">_</button>
     </div>
@@ -169,9 +188,83 @@ export function renderOverlay(cardNames: string[]): void {
 
   panel.innerHTML = html;
 
-  // Attach toggle handler — must re-attach after innerHTML replacement
+  // Attach toggle handler for the main body collapse/expand
   document.getElementById("dh-toggle-btn")!.addEventListener("click", () => {
     const body = document.getElementById("dh-body");
     body?.classList.toggle("dh-collapsed");
+  });
+
+  // Attach toggle handlers for each collapsible section title.
+  // Clicking a section title hides/shows its content and rotates the arrow.
+  panel.querySelectorAll(".dh-collapsible").forEach((titleEl) => {
+    titleEl.addEventListener("click", () => {
+      const targetId = titleEl.getAttribute("data-target");
+      if (!targetId) return;
+      const content = document.getElementById(targetId);
+      if (!content) return;
+      content.classList.toggle("dh-section-collapsed");
+      titleEl.classList.toggle("dh-collapsed-title");
+    });
+  });
+
+  // Make the panel draggable by its header. On mousedown, track the offset
+  // between the cursor and the panel's top-left corner, then update the
+  // panel position on mousemove until mouseup.
+  setupDrag(panel);
+}
+
+// Attaches drag-to-move behavior to the panel via its header element.
+// Uses mousedown on the header to initiate dragging, mousemove on the
+// document to update position, and mouseup to release. Switches from
+// the default right-positioned layout to explicit left/top positioning
+// on first drag so the panel tracks the cursor correctly.
+//
+// @param panel - The overlay panel element to make draggable
+function setupDrag(panel: HTMLElement): void {
+  const header = document.getElementById("dh-header");
+  if (!header) return;
+
+  let isDragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  header.addEventListener("mousedown", (e: MouseEvent) => {
+    // Only drag on left-click, and ignore clicks on the toggle button
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest(".dh-toggle")) return;
+
+    isDragging = true;
+    const rect = panel.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+
+    // Switch from right-positioned to left-positioned on first drag
+    // so the panel follows the cursor naturally
+    panel.style.right = "auto";
+    panel.style.left = rect.left + "px";
+    panel.style.top = rect.top + "px";
+
+    e.preventDefault();
+  });
+
+  document.addEventListener("mousemove", (e: MouseEvent) => {
+    if (!isDragging) return;
+
+    // Clamp position to keep the panel within the viewport
+    const x = Math.max(
+      0,
+      Math.min(e.clientX - offsetX, window.innerWidth - panel.offsetWidth),
+    );
+    const y = Math.max(
+      0,
+      Math.min(e.clientY - offsetY, window.innerHeight - panel.offsetHeight),
+    );
+
+    panel.style.left = x + "px";
+    panel.style.top = y + "px";
+  });
+
+  document.addEventListener("mouseup", () => {
+    isDragging = false;
   });
 }

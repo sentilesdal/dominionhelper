@@ -69,6 +69,34 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
+/* Collapsible section titles — clickable to toggle content */
+.dh-section-title.dh-collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+
+.dh-section-title.dh-collapsible:hover {
+  opacity: 0.8;
+}
+
+/* Arrow indicator for collapsible sections */
+.dh-collapse-arrow {
+  display: inline-block;
+  font-size: 8px;
+  margin-right: 4px;
+  transition: transform 0.15s ease;
+}
+
+/* Rotate arrow sideways when section is collapsed */
+.dh-collapsed-title .dh-collapse-arrow {
+  transform: rotate(-90deg);
+}
+
+/* Hidden section content when collapsed */
+.dh-section-content.dh-section-collapsed {
+  display: none;
+}
+
 .dh-components .dh-section-title { color: #64b5f6; }
 .dh-synergies .dh-section-title { color: #81c784; }
 .dh-archetypes .dh-section-title { color: #ffb74d; }
