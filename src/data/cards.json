@@ -2872,7 +2872,9 @@
     },
     "text": "The player to your left takes an extra turn after this one, in which you can see all cards they can and make all decisions for them. Any cards or tokens they would gain on that turn, you gain instead; any cards of theirs that are trashed are set aside and returned to their discard pile at end of turn.",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "payload"
+    ],
     "isTerminal": true,
     "isCantrip": false
   },
@@ -4681,7 +4683,9 @@
     },
     "text": "Draw 2 additional cards for your next hand.",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "non-terminal-draw"
+    ],
     "isTerminal": false,
     "isCantrip": false
   },
@@ -4696,7 +4700,9 @@
     },
     "text": "Move your -$2 cost token to an Action Supply pile.",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "cost-reducer"
+    ],
     "isTerminal": false,
     "isCantrip": false
   },
@@ -4879,7 +4885,9 @@
     },
     "text": "Move your +1 Card token to an Action Supply pile.",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "non-terminal-draw"
+    ],
     "isTerminal": false,
     "isCantrip": false
   },
@@ -5328,10 +5336,11 @@
     },
     "tags": [
       "duration",
-      "sifter"
+      "sifter",
+      "cantrip"
     ],
     "isTerminal": false,
-    "isCantrip": false
+    "isCantrip": true
   },
   {
     "name": "Capital",
@@ -5911,7 +5920,9 @@
     },
     "text": "When scoring, -2 VP per Silver and per Gold you have.",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "alt-vp"
+    ],
     "isTerminal": false,
     "isCantrip": false
   },
@@ -6198,7 +6209,9 @@
     },
     "text": "When scoring, -1 VP per card you have after the first 15.",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "alt-vp"
+    ],
     "isTerminal": false,
     "isCantrip": false
   },
@@ -6213,7 +6226,9 @@
     },
     "text": "When scoring, -3 VP per card you have exactly 1 copy of.",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "alt-vp"
+    ],
     "isTerminal": false,
     "isCantrip": false
   },
@@ -6396,7 +6411,7 @@
       "night"
     ],
     "isTerminal": false,
-    "isCantrip": false
+    "isCantrip": true
   },
   {
     "name": "Leprechaun",
@@ -7495,7 +7510,7 @@
       "non-terminal-draw"
     ],
     "isTerminal": false,
-    "isCantrip": false
+    "isCantrip": true
   },
   {
     "name": "Spices",
@@ -9192,7 +9207,9 @@
     "effects": {
       "cards": 2
     },
-    "tags": [],
+    "tags": [
+      "terminal-draw"
+    ],
     "isTerminal": false,
     "isCantrip": false
   },
@@ -9781,7 +9798,7 @@
       "cantrip"
     ],
     "isTerminal": false,
-    "isCantrip": false
+    "isCantrip": true
   },
   {
     "name": "Voyage",
@@ -10373,7 +10390,9 @@
     },
     "text": "At the start of your Buy phase, you may put a Favor token on a non-Victory Supply pile. Cards cost $1 less per Favor token on their piles.",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "cost-reducer"
+    ],
     "isTerminal": false,
     "isCantrip": false
   },
@@ -10710,7 +10729,6 @@
       "coins": 1
     },
     "tags": [
-      "cantrip",
       "trasher",
       "economy"
     ],
@@ -12073,7 +12091,9 @@
     },
     "text": "Cheap cards cost 1 Coin less.",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "cost-reducer"
+    ],
     "isTerminal": false,
     "isCantrip": false
   },
@@ -13644,10 +13664,11 @@
       "actions": 1
     },
     "tags": [
-      "non-terminal-draw"
+      "non-terminal-draw",
+      "cantrip"
     ],
     "isTerminal": false,
-    "isCantrip": false
+    "isCantrip": true
   },
   {
     "name": "Jester",
@@ -14911,7 +14932,9 @@
     },
     "text": "Each other player reveals the top 2 cards of their deck, trashes one of them costing from $3 to $6, and discards the rest. If a Knight is trashed by this, trash this. When you trash this, gain a Gold.",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "trasher"
+    ],
     "isTerminal": true,
     "isCantrip": false
   },
@@ -15069,7 +15092,12 @@
     },
     "text": "Choose two: +2 Cards; +2 Actions; +$2; gain 4 Silvers and put your deck into your discard pile. The choices must be different. (This is not in the Supply.)",
     "effects": {},
-    "tags": [],
+    "tags": [
+      "village",
+      "non-terminal-draw",
+      "economy",
+      "gainer"
+    ],
     "isTerminal": false,
     "isCantrip": false
   },
