@@ -109,6 +109,63 @@ describe("analyzeKingdom", () => {
     expect(result.components).toEqual([]);
   });
 
+  it("includes openings field in analysis result", () => {
+    const kingdom = [
+      "Village",
+      "Smithy",
+      "Chapel",
+      "Market",
+      "Festival",
+      "Witch",
+      "Moat",
+      "Remodel",
+      "Laboratory",
+      "Gardens",
+    ];
+    const result = analyzeKingdom(kingdom);
+
+    expect(result.openings).toBeDefined();
+    expect(result.openings.fiveTwo).toBeDefined();
+    expect(result.openings.fourThree).toBeDefined();
+    expect(Array.isArray(result.openings.fiveTwo)).toBe(true);
+    expect(Array.isArray(result.openings.fourThree)).toBe(true);
+  });
+
+  it("returns opening recommendations with correct structure", () => {
+    const kingdom = [
+      "Village",
+      "Smithy",
+      "Chapel",
+      "Market",
+      "Festival",
+      "Laboratory",
+      "Witch",
+      "Moat",
+      "Remodel",
+      "Council Room",
+    ];
+    const result = analyzeKingdom(kingdom);
+
+    // Should have recommendations since there are cards at $2-$5
+    expect(result.openings.fiveTwo.length).toBeGreaterThan(0);
+    expect(result.openings.fourThree.length).toBeGreaterThan(0);
+
+    // Each recommendation should have the required fields
+    for (const rec of result.openings.fiveTwo) {
+      expect(rec.cardName).toBeTruthy();
+      expect(typeof rec.cost).toBe("number");
+      expect(rec.reasoning).toBeTruthy();
+    }
+  });
+
+  it("returns empty openings for unknown cards", () => {
+    const kingdom = ["FakeCard1", "FakeCard2"];
+    const result = analyzeKingdom(kingdom);
+
+    expect(result.openings.fiveTwo).toEqual([]);
+    expect(result.openings.fourThree).toEqual([]);
+  });
+
   it("detects full engine potential", () => {
     const kingdom = [
       "Village",
