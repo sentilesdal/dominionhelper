@@ -166,3 +166,98 @@ export interface AnalysisResult {
   // Recommended opening buys for each starting split (5/2 and 4/3).
   openings: OpeningAnalysis;
 }
+
+// ─── Deck Tracker Types ────────────────────────────────────────────────
+//
+// Types for the real-time deck tracker that parses game log entries,
+// tracks card zones per player, and calculates draw probabilities.
+
+// Actions that can appear in the game log. Each maps to a specific
+// card movement pattern (e.g., "plays" moves cards from hand to play area).
+export type LogAction =
+  | "plays"
+  | "buys"
+  | "gains"
+  | "trashes"
+  | "draws"
+  | "discards"
+  | "shuffles"
+  | "topdecks"
+  | "starts-with"
+  | "reveals"
+  | "sets-aside"
+  | "returns"
+  | "passes";
+
+// A parsed game log line containing the acting player, the action taken,
+// and the cards involved. Produced by `parseLogLine` in the log parser.
+export interface LogEntry {
+  // Abbreviated player name as it appears in the log (e.g., "m" for "muddybrown")
+  playerAbbrev: string;
+  // The action verb parsed from the log line
+  action: LogAction;
+  // Card names involved in the action (already singularized)
+  cards: string[];
+  // Counts corresponding to each card name (e.g., [3, 2] for "3 Coppers and 2 Estates")
+  counts: number[];
+  // The original unparsed log line text
+  rawText: string;
+}
+
+// Zones where cards can reside during a Dominion game.
+// Cards move between zones based on game actions (play, buy, draw, etc.).
+export type CardZone = "deck" | "discard" | "hand" | "play" | "trash";
+
+// Card counts per zone for a single player. Each zone maps card names
+// to the number of copies in that zone. This is the core state tracked
+// by the deck tracker — updated on every parsed log entry.
+export type PlayerZones = Record<CardZone, Map<string, number>>;
+
+// Complete game state tracked by the deck tracker. Contains zone state
+// for all players, name mappings, and turn tracking.
+export interface GameState {
+  // Card zones per player, keyed by abbreviated name
+  players: Map<string, PlayerZones>;
+  // Maps abbreviated names (e.g., "m") to full names (e.g., "muddybrown")
+  playerNames: Map<string, string>;
+  // Current turn number (0 = before game starts)
+  currentTurn: number;
+  // Abbreviated name of the player whose turn it currently is
+  activePlayer: string;
+  // Abbreviated name of the local player (the one at the bottom of the screen)
+  localPlayer: string;
+}
+
+// Breakdown of a player's deck by card type category.
+// Used to show the deck composition section of the tracker UI.
+export interface DeckComposition {
+  actions: number;
+  treasures: number;
+  victories: number;
+  curses: number;
+  total: number;
+}
+
+// Draw probability calculations for the next hand draw.
+// Based on cards currently in the deck (and discard if deck < 5 cards).
+export interface DrawProbabilities {
+  // Probability of drawing a hand worth $5 or more
+  fivePlusCoinProb: number;
+  // Probability of drawing a hand worth $8 or more (Province money)
+  eightPlusCoinProb: number;
+  // Per-card probability of drawing at least one copy in a 5-card hand
+  cardDrawProb: Map<string, number>;
+  // Number of cards currently in the draw pile
+  cardsInDeck: number;
+  // Number of cards currently in the discard pile
+  cardsInDiscard: number;
+}
+
+// Combined statistics for a player, displayed in the tracker panel.
+// Produced by `calculateStats` in the stats module.
+export interface TrackerStats {
+  composition: DeckComposition;
+  probabilities: DrawProbabilities;
+  // All cards the player owns (across all non-trash zones), name → total count
+  allCards: Map<string, number>;
+}
