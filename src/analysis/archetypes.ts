@@ -1,32 +1,28 @@
-/**
- * Dominion Helper — Strategy Archetype Detection
- *
- * Identifies viable macro-strategies for the current kingdom. Dominion
- * games generally fall into one of several archetypes (engine, big money,
- * rush, slog, combo), and the best kingdoms support multiple approaches.
- * This module checks which archetypes the kingdom's cards can support.
- *
- * @module archetypes
- */
+// Dominion Helper — Strategy Archetype Detection
+//
+// Identifies viable macro-strategies for the current kingdom. Dominion
+// games generally fall into one of several archetypes (engine, big money,
+// rush, slog, combo), and the best kingdoms support multiple approaches.
+// This module checks which archetypes the kingdom's cards can support.
+//
+// @module archetypes
 
 import type { Card, TagClassification } from "../types";
 
-/**
- * Identifies viable macro-strategies based on available kingdom components.
- *
- * Evaluates the kingdom for five archetype patterns:
- * - **Engine**: Village + draw + payload (optional trashing, +Buy)
- * - **Big Money + X**: Strong terminal as a supplement to money-based strategy
- * - **Rush**: Gainer + alt-VP for fast point accumulation
- * - **Slog**: Attacks without trashing — a war of attrition
- * - **Combo**: Throne variant + cost reducer for massive discount turns
- *
- * Falls back to "Big Money likely" if no specific archetype is detected.
- *
- * @param cards - Array of Card objects in the current kingdom
- * @param tags - Pre-classified tag groupings from classifyComponents
- * @returns Array of human-readable strategy descriptions
- */
+// Identifies viable macro-strategies based on available kingdom components.
+//
+// Evaluates the kingdom for five archetype patterns:
+// - **Engine**: Village + draw + payload (optional trashing, +Buy)
+// - **Big Money + X**: Strong terminal as a supplement to money-based strategy
+// - **Rush**: Gainer + alt-VP for fast point accumulation
+// - **Slog**: Attacks without trashing — a war of attrition
+// - **Combo**: Throne variant + cost reducer for massive discount turns
+//
+// Falls back to "Big Money likely" if no specific archetype is detected.
+//
+// @param cards - Array of Card objects in the current kingdom
+// @param tags - Pre-classified tag groupings from classifyComponents
+// @returns Array of human-readable strategy descriptions
 export function detectArchetypes(
   cards: Card[],
   tags: TagClassification,

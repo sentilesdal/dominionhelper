@@ -1,19 +1,17 @@
-/**
- * Dominion Helper — Build Script
- *
- * Bundles the Chrome extension into the dist/ directory using Vite.
- * Chrome content scripts don't support ES modules, so each entry point
- * is bundled separately into IIFE format.
- *
- * Three builds are performed:
- * 1. Content script — bundles all analysis + content modules + card data into one file
- * 2. Service worker — standalone background script
- * 3. Popup — standalone popup script
- *
- * After bundling, static assets (CSS, HTML, icons) are copied to dist/
- * and a new manifest.json is generated with dist-relative paths (single
- * content script bundle instead of the 7 separate files in the source manifest).
- */
+// Dominion Helper — Build Script
+//
+// Bundles the Chrome extension into the dist/ directory using Vite.
+// Chrome content scripts don't support ES modules, so each entry point
+// is bundled separately into IIFE format.
+//
+// Three builds are performed:
+// 1. Content script — bundles all analysis + content modules + card data into one file
+// 2. Service worker — standalone background script
+// 3. Popup — standalone popup script
+//
+// After bundling, static assets (CSS, HTML, icons) are copied to dist/
+// and a new manifest.json is generated with dist-relative paths (single
+// content script bundle instead of the 7 separate files in the source manifest).
 
 import { build } from "vite";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -25,14 +23,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const dist = resolve(root, "dist");
 
-/**
- * Builds a single entry point as an IIFE bundle for Chrome extension use.
- * Minification is disabled to aid debugging; sourcemaps are off since
- * content scripts run in an isolated world where devtools access is limited.
- *
- * @param {string} entry - Path to the TypeScript entry point (relative to project root)
- * @param {string} outFile - Output filename in the dist/ directory
- */
+// Builds a single entry point as an IIFE bundle for Chrome extension use.
+// Minification is disabled to aid debugging; sourcemaps are off since
+// content scripts run in an isolated world where devtools access is limited.
+//
+// @param {string} entry - Path to the TypeScript entry point (relative to project root)
+// @param {string} outFile - Output filename in the dist/ directory
 function chromeExtBuild(entry, outFile) {
   return build({
     root,

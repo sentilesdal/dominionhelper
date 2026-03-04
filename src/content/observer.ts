@@ -1,21 +1,19 @@
-/**
- * Dominion Helper — DOM Observer
- *
- * Watches the dominion.games page for kingdom cards to appear and extracts
- * their names. Uses two strategies in order of reliability:
- *
- * 1. KINGDOM-VIEWER element — contains only kingdom/landscape/shelter cards,
- *    no hand or basic supply cards. Most reliable.
- * 2. `.card-stacks` fallback — all cards including hand/basic supply,
- *    filtered by vertical position (supply is in the top half of the screen).
- *
- * The observer uses MutationObserver with a 500ms debounce to avoid
- * re-analyzing during rapid DOM updates (e.g., card animations).
- *
- * @module observer
- */
+// Dominion Helper — DOM Observer
+//
+// Watches the dominion.games page for kingdom cards to appear and extracts
+// their names. Uses two strategies in order of reliability:
+//
+// 1. KINGDOM-VIEWER element — contains only kingdom/landscape/shelter cards,
+//    no hand or basic supply cards. Most reliable.
+// 2. `.card-stacks` fallback — all cards including hand/basic supply,
+//    filtered by vertical position (supply is in the top half of the screen).
+//
+// The observer uses MutationObserver with a 500ms debounce to avoid
+// re-analyzing during rapid DOM updates (e.g., card animations).
+//
+// @module observer
 
-/** Cards always present in the supply — never part of the kingdom selection. */
+// Cards always present in the supply — never part of the kingdom selection.
 const BASIC_SUPPLY = new Set([
   "Copper",
   "Silver",
@@ -29,23 +27,21 @@ const BASIC_SUPPLY = new Set([
   "Curse",
 ]);
 
-/** Shelter cards replace Estates in starting hands — not kingdom cards. */
+// Shelter cards replace Estates in starting hands — not kingdom cards.
 const SHELTERS = new Set(["Hovel", "Necropolis", "Overgrown Estate"]);
 
-/**
- * Extracts kingdom card names from the dominion.games DOM.
- *
- * Tries the KINGDOM-VIEWER element first (only contains kingdom cards,
- * landscapes, and shelters). Falls back to `.card-stacks` with position-based
- * filtering if KINGDOM-VIEWER yields fewer than 10 cards.
- *
- * Filters out basic supply cards (Copper, Silver, Gold, etc.) and shelter
- * cards (Hovel, Necropolis, Overgrown Estate) since these are not part of
- * the kingdom selection.
- *
- * @param root - DOM element to search within (typically `document.body`)
- * @returns Array of unique card name strings found in the kingdom
- */
+// Extracts kingdom card names from the dominion.games DOM.
+//
+// Tries the KINGDOM-VIEWER element first (only contains kingdom cards,
+// landscapes, and shelters). Falls back to `.card-stacks` with position-based
+// filtering if KINGDOM-VIEWER yields fewer than 10 cards.
+//
+// Filters out basic supply cards (Copper, Silver, Gold, etc.) and shelter
+// cards (Hovel, Necropolis, Overgrown Estate) since these are not part of
+// the kingdom selection.
+//
+// @param root - DOM element to search within (typically `document.body`)
+// @returns Array of unique card name strings found in the kingdom
 export function extractCardNames(root: Document | Element): string[] {
   const found = new Set<string>();
 
@@ -94,16 +90,14 @@ export function extractCardNames(root: Document | Element): string[] {
   return [...found];
 }
 
-/**
- * Starts observing the DOM for kingdom card changes and invokes the callback
- * when a complete kingdom (10+ cards) is detected.
- *
- * Uses MutationObserver on `document.body` with a 500ms debounce to batch
- * rapid DOM changes (e.g., card deal animations). Also checks immediately
- * on call in case the kingdom is already rendered.
- *
- * @param callback - Function called with an array of card names when a kingdom is detected
- */
+// Starts observing the DOM for kingdom card changes and invokes the callback
+// when a complete kingdom (10+ cards) is detected.
+//
+// Uses MutationObserver on `document.body` with a 500ms debounce to batch
+// rapid DOM changes (e.g., card deal animations). Also checks immediately
+// on call in case the kingdom is already rendered.
+//
+// @param callback - Function called with an array of card names when a kingdom is detected
 export function observeKingdom(callback: (cards: string[]) => void): void {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 

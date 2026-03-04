@@ -1,12 +1,10 @@
-/**
- * Dominion Helper — Popup Script
- *
- * Runs in the extension popup (opened by clicking the extension icon).
- * Requests the current kingdom from the service worker and displays it.
- * Shows a "no kingdom detected" message if no game is active.
- *
- * @module popup
- */
+// Dominion Helper — Popup Script
+//
+// Runs in the extension popup (opened by clicking the extension icon).
+// Requests the current kingdom from the service worker and displays it.
+// Shows a "no kingdom detected" message if no game is active.
+//
+// @module popup
 
 document.addEventListener("DOMContentLoaded", () => {
   const statusEl = document.getElementById("status")!;

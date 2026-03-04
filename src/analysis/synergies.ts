@@ -1,28 +1,24 @@
-/**
- * Dominion Helper — Synergy Detection
- *
- * Identifies strategic card synergies within a kingdom by examining
- * tag combinations. Each rule checks for a known Dominion pattern
- * (e.g., village + draw = engine core) and produces a human-readable
- * description when the pattern is present.
- *
- * @module synergies
- */
+// Dominion Helper — Synergy Detection
+//
+// Identifies strategic card synergies within a kingdom by examining
+// tag combinations. Each rule checks for a known Dominion pattern
+// (e.g., village + draw = engine core) and produces a human-readable
+// description when the pattern is present.
+//
+// @module synergies
 
 import type { Card, TagClassification } from "../types";
 
-/**
- * Detects synergies between cards in the kingdom based on tag combinations.
- *
- * Checks for: engine cores (village + draw), villager engines, curse defense
- * (trasher + curser), rush potential (gainer + alt-VP), trash-for-benefit
- * chains, draw-to-X combos, throne room variants, multi-buy, and full
- * engine potential (village + draw + trashing).
- *
- * @param cards - Array of Card objects in the current kingdom
- * @param tags - Pre-classified tag groupings from classifyComponents
- * @returns Array of human-readable synergy descriptions
- */
+// Detects synergies between cards in the kingdom based on tag combinations.
+//
+// Checks for: engine cores (village + draw), villager engines, curse defense
+// (trasher + curser), rush potential (gainer + alt-VP), trash-for-benefit
+// chains, draw-to-X combos, throne room variants, multi-buy, and full
+// engine potential (village + draw + trashing).
+//
+// @param cards - Array of Card objects in the current kingdom
+// @param tags - Pre-classified tag groupings from classifyComponents
+// @returns Array of human-readable synergy descriptions
 export function detectSynergies(
   cards: Card[],
   tags: TagClassification,

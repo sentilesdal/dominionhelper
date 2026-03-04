@@ -1,15 +1,13 @@
-/**
- * Dominion Helper — Background Service Worker
- *
- * Handles message passing between the content script and the popup.
- * The content script sends KINGDOM_DETECTED when it finds kingdom cards,
- * and the popup sends GET_KINGDOM to retrieve the stored kingdom.
- *
- * Uses chrome.storage.session (not local) so the kingdom data is cleared
- * when the browser session ends — it's ephemeral game state, not persistent.
- *
- * @module service-worker
- */
+// Dominion Helper — Background Service Worker
+//
+// Handles message passing between the content script and the popup.
+// The content script sends KINGDOM_DETECTED when it finds kingdom cards,
+// and the popup sends GET_KINGDOM to retrieve the stored kingdom.
+//
+// Uses chrome.storage.session (not local) so the kingdom data is cleared
+// when the browser session ends — it's ephemeral game state, not persistent.
+//
+// @module service-worker
 
 chrome.runtime.onMessage.addListener(
   (
