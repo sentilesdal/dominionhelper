@@ -12,7 +12,12 @@ vi.mock("../src/analysis/engine", () => ({
     archetypes: ["Engine"],
     openings: {
       fiveTwo: [
-        { cardName: "Smithy", cost: 4, reasoning: "Strong draw", priority: 1 },
+        {
+          cardName: "Smithy",
+          cost: 4,
+          reasoning: "Strong draw",
+          priority: 1,
+        },
       ],
       fourThree: [
         {
@@ -27,10 +32,11 @@ vi.mock("../src/analysis/engine", () => ({
   })),
 }));
 
-import { renderOverlay } from "../src/content/ui";
+import { renderOverlay, resetUIState } from "../src/content/ui";
 
 beforeEach(() => {
   document.body.innerHTML = "";
+  resetUIState();
 });
 
 describe("collapsible sections", () => {
@@ -91,6 +97,113 @@ describe("collapsible sections", () => {
     expect(openingsSection).not.toBeNull();
     const title = openingsSection!.querySelector(".dh-collapsible");
     expect(title).not.toBeNull();
+  });
+});
+
+describe("state persistence across re-renders", () => {
+  it("preserves body collapsed state after re-render", () => {
+    renderOverlay(["Village", "Smithy"]);
+    const toggleBtn = document.getElementById("dh-toggle-btn")!;
+
+    // Collapse the body
+    toggleBtn.click();
+    expect(
+      document.getElementById("dh-body")!.classList.contains("dh-collapsed"),
+    ).toBe(true);
+
+    // Re-render (simulates game state change)
+    renderOverlay(["Village", "Smithy"]);
+
+    // Body should still be collapsed
+    expect(
+      document.getElementById("dh-body")!.classList.contains("dh-collapsed"),
+    ).toBe(true);
+  });
+
+  it("preserves section collapsed state after re-render", () => {
+    renderOverlay(["Village", "Smithy"]);
+    const title = document.querySelector(".dh-collapsible") as HTMLElement;
+    const targetId = title.getAttribute("data-target")!;
+
+    // Collapse the first section
+    title.click();
+
+    // Re-render
+    renderOverlay(["Village", "Smithy"]);
+
+    // Section should still be collapsed
+    const content = document.getElementById(targetId)!;
+    const newTitle = document.querySelector(
+      `[data-target="${targetId}"]`,
+    ) as HTMLElement;
+    expect(content.classList.contains("dh-section-collapsed")).toBe(true);
+    expect(newTitle.classList.contains("dh-collapsed-title")).toBe(true);
+  });
+
+  it("preserves expanded state after re-render when section was toggled back open", () => {
+    renderOverlay(["Village", "Smithy"]);
+    const title = document.querySelector(".dh-collapsible") as HTMLElement;
+    const targetId = title.getAttribute("data-target")!;
+
+    // Collapse then expand
+    title.click();
+    title.click();
+
+    // Re-render
+    renderOverlay(["Village", "Smithy"]);
+
+    // Section should still be expanded
+    const content = document.getElementById(targetId)!;
+    expect(content.classList.contains("dh-section-collapsed")).toBe(false);
+  });
+
+  it("preserves multiple collapsed sections independently", () => {
+    renderOverlay(["Village", "Smithy"]);
+    const titles = document.querySelectorAll(
+      ".dh-collapsible",
+    ) as NodeListOf<HTMLElement>;
+
+    // Collapse the first and third sections (if they exist)
+    titles[0].click();
+    if (titles.length > 2) titles[2].click();
+
+    // Re-render
+    renderOverlay(["Village", "Smithy"]);
+
+    // First section should be collapsed
+    const firstId = titles[0].getAttribute("data-target")!;
+    expect(
+      document
+        .getElementById(firstId)!
+        .classList.contains("dh-section-collapsed"),
+    ).toBe(true);
+
+    // Second section should still be expanded
+    const secondId = titles[1].getAttribute("data-target")!;
+    expect(
+      document
+        .getElementById(secondId)!
+        .classList.contains("dh-section-collapsed"),
+    ).toBe(false);
+  });
+
+  it("does not leak drag listeners on re-render", () => {
+    const addEventSpy = vi.spyOn(document, "addEventListener");
+
+    renderOverlay(["Village", "Smithy"]);
+    const callsAfterFirst = addEventSpy.mock.calls.filter(
+      (c) => c[0] === "mousemove",
+    ).length;
+
+    renderOverlay(["Village", "Smithy"]);
+    const callsAfterSecond = addEventSpy.mock.calls.filter(
+      (c) => c[0] === "mousemove",
+    ).length;
+
+    // Should not have added more document-level mousemove listeners
+    expect(callsAfterSecond).toBe(callsAfterFirst);
+
+    addEventSpy.mockRestore();
   });
 });
 

@@ -19,6 +19,17 @@ const PANEL_ID = "dominion-helper-panel";
 // Counter for generating unique section IDs within a single render pass.
 let sectionIdCounter = 0;
 
+// Persisted UI state that survives innerHTML re-renders.
+// Tracked as module-level variables so they're preserved when
+// renderOverlay is called again due to game state changes.
+let bodyCollapsed = false;
+const collapsedSections = new Set<string>();
+
+// Whether drag listeners have been attached to the document.
+// These only need to be set up once since they live on the document,
+// not on innerHTML children that get destroyed on re-render.
+let dragInitialized = false;
+
 // Gets or creates the overlay panel element. The panel is appended to
 // `document.body` and persists across re-renders (innerHTML is replaced,
 // but the container element is reused).
@@ -126,6 +137,10 @@ function renderOpenings(
 // results into the overlay panel. Replaces the panel's innerHTML entirely
 // on each call (triggered when a new kingdom is detected).
 //
+// Collapse state (both the main body and individual sections) is persisted
+// in module-level variables so it survives re-renders triggered by game
+// state changes. Drag listeners are only attached once.
+//
 // The panel contains these sections (each omitted if empty):
 // - Detected Kingdom: list of card names found
 // - Not In Database: cards not in our card database
@@ -188,29 +203,62 @@ export function renderOverlay(cardNames: string[]): void {
 
   panel.innerHTML = html;
 
-  // Attach toggle handler for the main body collapse/expand
+  // Restore main body collapse state from the persisted variable
+  if (bodyCollapsed) {
+    document.getElementById("dh-body")?.classList.add("dh-collapsed");
+  }
+
+  // Attach toggle handler for the main body collapse/expand.
+  // Updates the persisted state so it survives the next re-render.
   document.getElementById("dh-toggle-btn")!.addEventListener("click", () => {
     const body = document.getElementById("dh-body");
     body?.classList.toggle("dh-collapsed");
+    bodyCollapsed = !bodyCollapsed;
   });
 
-  // Attach toggle handlers for each collapsible section title.
-  // Clicking a section title hides/shows its content and rotates the arrow.
+  // Restore and attach toggle handlers for each collapsible section.
+  // Section IDs are stable across renders (counter resets to 0 each time),
+  // so the same section always gets the same ID.
   panel.querySelectorAll(".dh-collapsible").forEach((titleEl) => {
+    const targetId = titleEl.getAttribute("data-target");
+    if (!targetId) return;
+
+    // Restore previously collapsed state
+    if (collapsedSections.has(targetId)) {
+      const content = document.getElementById(targetId);
+      content?.classList.add("dh-section-collapsed");
+      titleEl.classList.add("dh-collapsed-title");
+    }
+
     titleEl.addEventListener("click", () => {
-      const targetId = titleEl.getAttribute("data-target");
-      if (!targetId) return;
       const content = document.getElementById(targetId);
       if (!content) return;
       content.classList.toggle("dh-section-collapsed");
       titleEl.classList.toggle("dh-collapsed-title");
+
+      // Persist the toggle so it survives the next re-render
+      if (collapsedSections.has(targetId)) {
+        collapsedSections.delete(targetId);
+      } else {
+        collapsedSections.add(targetId);
+      }
     });
   });
 
-  // Make the panel draggable by its header. On mousedown, track the offset
-  // between the cursor and the panel's top-left corner, then update the
-  // panel position on mousemove until mouseup.
-  setupDrag(panel);
+  // Drag listeners live on the document, so only set them up once.
+  // Re-attaching on every render would leak listeners.
+  if (!dragInitialized) {
+    setupDrag(panel);
+    dragInitialized = true;
+  }
+}
+
+// Resets all persisted UI state. Exported only for use in tests to ensure
+// a clean state between test cases — not intended for production use.
+export function resetUIState(): void {
+  bodyCollapsed = false;
+  collapsedSections.clear();
+  dragInitialized = false;
 }
 
 // Attaches drag-to-move behavior to the panel via its header element.
