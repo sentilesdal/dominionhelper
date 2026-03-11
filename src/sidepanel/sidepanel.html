@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="dh-sidepanel">
+    <div class="dh-header">
+      <span class="dh-title">Dominion Helper</span>
+    </div>
+    <div class="dh-tabs">
+      <button class="dh-tab active" data-tab="kingdom">Kingdom</button>
+      <button class="dh-tab" data-tab="tracker">Tracker</button>
+    </div>
+    <div class="dh-tab-content" id="kingdom-tab">
+      <div class="dh-empty-state">Waiting for a game on dominion.games...</div>
+    </div>
+    <div class="dh-tab-content dh-hidden" id="tracker-tab">
+      <div class="dh-empty-state">Waiting for game to start...</div>
+    </div>
+  </div>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

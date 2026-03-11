@@ -215,9 +215,9 @@ describe("stripAnnotations", () => {
   });
 
   it("strips multi-coin bonus annotations", () => {
-    expect(
-      stripAnnotations("m plays Copper, Copper and Silver. (+$4)"),
-    ).toBe("m plays Copper, Copper and Silver.");
+    expect(stripAnnotations("m plays Copper, Copper and Silver. (+$4)")).toBe(
+      "m plays Copper, Copper and Silver.",
+    );
   });
 
   it("strips buy bonus annotations", () => {

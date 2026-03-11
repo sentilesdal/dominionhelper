@@ -1,177 +1,112 @@
-// @vitest-environment jsdom
+import { describe, it, expect } from "vitest";
+import { serializeTrackerStats } from "../src/content/serialize";
+import type { TrackerStats } from "../src/types";
 
-import { describe, it, expect, beforeEach } from "vitest";
-import type { Card, GameState } from "../src/types";
-import { createPlayerZones } from "../src/tracker/deck-state";
-import {
-  renderTrackerPanel,
-  removeTrackerPanel,
-} from "../src/tracker/tracker-ui";
-
-// Helper to build a minimal Card for testing
-function makeCard(name: string, types: string[], coins: number = 0): Card {
+function makeTrackerStats(): TrackerStats {
   return {
-    name,
-    set: "Base",
-    types: types as Card["types"],
-    cost: { coins: 0 },
-    text: "",
-    effects: { coins: coins || undefined },
-    tags: [],
-    isTerminal: false,
-    isCantrip: false,
+    composition: {
+      actions: 2,
+      treasures: 7,
+      victories: 3,
+      curses: 0,
+      total: 12,
+    },
+    probabilities: {
+      fivePlusCoinProb: 0.35,
+      eightPlusCoinProb: 0.05,
+      cardDrawProb: new Map([
+        ["Copper", 0.97],
+        ["Estate", 0.83],
+        ["Village", 0.45],
+      ]),
+      cardsInDeck: 7,
+      cardsInDiscard: 0,
+    },
+    allCards: new Map([
+      ["Copper", 7],
+      ["Estate", 3],
+      ["Village", 2],
+    ]),
   };
 }
 
-function makeCardDb(cards: Card[]): Map<string, Card> {
-  return new Map(cards.map((c) => [c.name, c]));
-}
+describe("serializeTrackerStats", () => {
+  it("converts Maps to plain objects", () => {
+    const stats = makeTrackerStats();
+    const serialized = serializeTrackerStats(stats);
 
-// Builds a GameState with one player who has the standard starting deck
-function makeGameStateWithStartingDeck(): GameState {
-  const zones = createPlayerZones();
-  zones.deck.set("Copper", 7);
-  zones.deck.set("Estate", 3);
+    // cardDrawProb should be a plain object
+    expect(serialized.probabilities.cardDrawProb).toEqual({
+      Copper: 0.97,
+      Estate: 0.83,
+      Village: 0.45,
+    });
 
-  const state: GameState = {
-    players: new Map([["m", zones]]),
-    playerNames: new Map([["m", "muddybrown"]]),
-    currentTurn: 1,
-    activePlayer: "m",
-    localPlayer: "m",
-  };
-
-  return state;
-}
-
-beforeEach(() => {
-  // Clean up any panels from previous tests
-  document.body.innerHTML = "";
-});
-
-describe("renderTrackerPanel", () => {
-  it("creates the tracker panel element", () => {
-    const state = makeGameStateWithStartingDeck();
-    const cardDb = makeCardDb([
-      makeCard("Copper", ["Treasure"], 1),
-      makeCard("Estate", ["Victory"]),
-    ]);
-
-    renderTrackerPanel(state, cardDb);
-
-    const panel = document.getElementById("dominion-helper-tracker");
-    expect(panel).not.toBeNull();
+    // allCards should be a plain object
+    expect(serialized.allCards).toEqual({
+      Copper: 7,
+      Estate: 3,
+      Village: 2,
+    });
   });
 
-  it("shows deck composition", () => {
-    const state = makeGameStateWithStartingDeck();
-    const cardDb = makeCardDb([
-      makeCard("Copper", ["Treasure"], 1),
-      makeCard("Estate", ["Victory"]),
-    ]);
+  it("preserves composition values", () => {
+    const stats = makeTrackerStats();
+    const serialized = serializeTrackerStats(stats);
 
-    renderTrackerPanel(state, cardDb);
-
-    const panel = document.getElementById("dominion-helper-tracker")!;
-    const text = panel.textContent!;
-    expect(text).toContain("Treasures: 7");
-    expect(text).toContain("Victories: 3");
-    expect(text).toContain("Total: 10 cards");
+    expect(serialized.composition).toEqual({
+      actions: 2,
+      treasures: 7,
+      victories: 3,
+      curses: 0,
+      total: 12,
+    });
   });
 
-  it("shows card zone counts", () => {
-    const state = makeGameStateWithStartingDeck();
-    const zones = state.players.get("m")!;
-    // Move some cards to hand
-    zones.deck.set("Copper", 4);
-    zones.hand.set("Copper", 3);
+  it("preserves probability scalar values", () => {
+    const stats = makeTrackerStats();
+    const serialized = serializeTrackerStats(stats);
 
-    const cardDb = makeCardDb([
-      makeCard("Copper", ["Treasure"], 1),
-      makeCard("Estate", ["Victory"]),
-    ]);
-
-    renderTrackerPanel(state, cardDb);
-
-    const panel = document.getElementById("dominion-helper-tracker")!;
-    const text = panel.textContent!;
-    expect(text).toContain("Draw pile: 7");
-    expect(text).toContain("Hand: 3");
+    expect(serialized.probabilities.fivePlusCoinProb).toBe(0.35);
+    expect(serialized.probabilities.eightPlusCoinProb).toBe(0.05);
+    expect(serialized.probabilities.cardsInDeck).toBe(7);
+    expect(serialized.probabilities.cardsInDiscard).toBe(0);
   });
 
-  it("shows all owned cards", () => {
-    const state = makeGameStateWithStartingDeck();
-    const cardDb = makeCardDb([
-      makeCard("Copper", ["Treasure"], 1),
-      makeCard("Estate", ["Victory"]),
-    ]);
+  it("produces JSON-serializable output", () => {
+    const stats = makeTrackerStats();
+    const serialized = serializeTrackerStats(stats);
 
-    renderTrackerPanel(state, cardDb);
+    // This should not throw — all Maps have been converted to plain objects
+    const json = JSON.stringify(serialized);
+    const parsed = JSON.parse(json);
 
-    const panel = document.getElementById("dominion-helper-tracker")!;
-    const text = panel.textContent!;
-    expect(text).toContain("Copper x7");
-    expect(text).toContain("Estate x3");
+    expect(parsed.allCards.Copper).toBe(7);
+    expect(parsed.probabilities.cardDrawProb.Copper).toBe(0.97);
   });
 
-  it("shows player tabs", () => {
-    const state = makeGameStateWithStartingDeck();
-    // Add opponent
-    const oppZones = createPlayerZones();
-    oppZones.deck.set("Copper", 7);
-    state.players.set("o", oppZones);
-    state.playerNames.set("o", "opponent");
-
-    const cardDb = makeCardDb([makeCard("Copper", ["Treasure"], 1)]);
-
-    renderTrackerPanel(state, cardDb);
-
-    const tabs = document.querySelectorAll(".dh-tracker-tab");
-    expect(tabs.length).toBe(2);
-  });
-
-  it("reuses existing panel on re-render", () => {
-    const state = makeGameStateWithStartingDeck();
-    const cardDb = makeCardDb([makeCard("Copper", ["Treasure"], 1)]);
-
-    renderTrackerPanel(state, cardDb);
-    renderTrackerPanel(state, cardDb);
-
-    const panels = document.querySelectorAll("#dominion-helper-tracker");
-    expect(panels.length).toBe(1);
-  });
-
-  it("shows waiting message when no zones available", () => {
-    const state: GameState = {
-      players: new Map(),
-      playerNames: new Map(),
-      currentTurn: 0,
-      activePlayer: "",
-      localPlayer: "",
+  it("handles empty Maps", () => {
+    const stats: TrackerStats = {
+      composition: {
+        actions: 0,
+        treasures: 0,
+        victories: 0,
+        curses: 0,
+        total: 0,
+      },
+      probabilities: {
+        fivePlusCoinProb: 0,
+        eightPlusCoinProb: 0,
+        cardDrawProb: new Map(),
+        cardsInDeck: 0,
+        cardsInDiscard: 0,
+      },
+      allCards: new Map(),
     };
-    const cardDb = makeCardDb([]);
 
-    renderTrackerPanel(state, cardDb);
+    const serialized = serializeTrackerStats(stats);
 
-    const panel = document.getElementById("dominion-helper-tracker")!;
-    expect(panel.textContent).toContain("Waiting for game to start");
-  });
-});
-
-describe("removeTrackerPanel", () => {
-  it("removes the tracker panel from the DOM", () => {
-    const state = makeGameStateWithStartingDeck();
-    const cardDb = makeCardDb([makeCard("Copper", ["Treasure"], 1)]);
-
-    renderTrackerPanel(state, cardDb);
-    expect(document.getElementById("dominion-helper-tracker")).not.toBeNull();
-
-    removeTrackerPanel();
-    expect(document.getElementById("dominion-helper-tracker")).toBeNull();
-  });
-
-  it("does nothing if panel doesn't exist", () => {
-    // Should not throw
-    removeTrackerPanel();
+    expect(serialized.allCards).toEqual({});
+    expect(serialized.probabilities.cardDrawProb).toEqual({});
   });
 });

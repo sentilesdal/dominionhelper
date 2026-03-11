@@ -2,55 +2,94 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock the analysis engine so renderOverlay doesn't need real card data
-vi.mock("../src/analysis/engine", () => ({
-  analyzeKingdom: vi.fn(() => ({
+// Must be hoisted before module imports so chrome is defined when
+// sidepanel.ts top-level code (onMessage.addListener, init) runs.
+const { mockSendMessage } = vi.hoisted(() => {
+  const mockAddListener = vi.fn();
+  const mockSendMessage = vi.fn(
+    (_msg: unknown, callback?: (response: unknown) => void) => {
+      if (callback) callback(undefined);
+    },
+  );
+
+  // Set chrome global before any module code runs
+  globalThis.chrome = {
+    runtime: {
+      onMessage: { addListener: mockAddListener },
+      sendMessage: mockSendMessage,
+    },
+  } as unknown as typeof chrome;
+
+  return { mockAddListener, mockSendMessage };
+});
+
+import {
+  renderKingdomAnalysis,
+  renderSection,
+  renderOpenings,
+  renderTracker,
+} from "../src/sidepanel/sidepanel";
+import type { AnalysisResult, TrackerData } from "../src/types";
+
+beforeEach(() => {
+  // Set up the DOM structure expected by the side panel
+  document.body.innerHTML = `
+    <div id="kingdom-tab"></div>
+    <div id="tracker-tab"></div>
+  `;
+});
+
+function makeAnalysis(overrides?: Partial<AnalysisResult>): AnalysisResult {
+  return {
     kingdom: ["Village", "Smithy"],
     unknown: [],
-    components: ["Village: Village", "Draw: Smithy"],
+    components: ["Villages: Village", "Draw: Smithy"],
     synergies: ["Engine core: Village + Smithy"],
     archetypes: ["Engine"],
     openings: {
-      fiveTwo: [
-        { cardName: "Smithy", cost: 4, reasoning: "Strong draw", priority: 1 },
-      ],
-      fourThree: [
-        {
-          cardName: "Village",
-          cost: 3,
-          reasoning: "Village first",
-          priority: 1,
-        },
-      ],
+      fiveTwo: [{ cardName: "Smithy", cost: 4, reasoning: "Strong draw" }],
+      fourThree: [{ cardName: "Village", cost: 3, reasoning: "Village first" }],
     },
     notes: ["No +Buy available"],
-  })),
-}));
+    ...overrides,
+  };
+}
 
-import { renderOverlay } from "../src/content/ui";
+describe("renderKingdomAnalysis", () => {
+  it("renders all sections into the kingdom tab", () => {
+    renderKingdomAnalysis(makeAnalysis());
 
-beforeEach(() => {
-  document.body.innerHTML = "";
-});
+    const container = document.getElementById("kingdom-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("Village");
+    expect(text).toContain("Smithy");
+    expect(text).toContain("Engine core");
+    expect(text).toContain("No +Buy available");
+  });
 
-describe("collapsible sections", () => {
-  it("renders collapse arrows on section titles", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const arrows = document.querySelectorAll(".dh-collapse-arrow");
+  it("renders collapsible sections with arrows", () => {
+    renderKingdomAnalysis(makeAnalysis());
+
+    const container = document.getElementById("kingdom-tab")!;
+    const arrows = container.querySelectorAll(".dh-collapse-arrow");
     expect(arrows.length).toBeGreaterThan(0);
   });
 
   it("all sections start expanded", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const contents = document.querySelectorAll(".dh-section-content");
+    renderKingdomAnalysis(makeAnalysis());
+
+    const container = document.getElementById("kingdom-tab")!;
+    const contents = container.querySelectorAll(".dh-section-content");
     for (const content of contents) {
       expect(content.classList.contains("dh-section-collapsed")).toBe(false);
     }
   });
 
   it("clicking a section title collapses its content", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const title = document.querySelector(".dh-collapsible") as HTMLElement;
+    renderKingdomAnalysis(makeAnalysis());
+
+    const container = document.getElementById("kingdom-tab")!;
+    const title = container.querySelector(".dh-collapsible") as HTMLElement;
     const targetId = title.getAttribute("data-target")!;
     const content = document.getElementById(targetId)!;
 
@@ -61,12 +100,13 @@ describe("collapsible sections", () => {
   });
 
   it("clicking a collapsed section title expands it again", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const title = document.querySelector(".dh-collapsible") as HTMLElement;
+    renderKingdomAnalysis(makeAnalysis());
+
+    const container = document.getElementById("kingdom-tab")!;
+    const title = container.querySelector(".dh-collapsible") as HTMLElement;
     const targetId = title.getAttribute("data-target")!;
     const content = document.getElementById(targetId)!;
 
-    // Collapse then expand
     title.click();
     title.click();
 
@@ -75,8 +115,10 @@ describe("collapsible sections", () => {
   });
 
   it("each section has a unique target ID", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const titles = document.querySelectorAll(".dh-collapsible");
+    renderKingdomAnalysis(makeAnalysis());
+
+    const container = document.getElementById("kingdom-tab")!;
+    const titles = container.querySelectorAll(".dh-collapsible");
     const ids = new Set<string>();
     for (const title of titles) {
       const id = title.getAttribute("data-target")!;
@@ -85,118 +127,199 @@ describe("collapsible sections", () => {
     }
   });
 
-  it("openings section is also collapsible", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const openingsSection = document.querySelector(".dh-openings");
-    expect(openingsSection).not.toBeNull();
-    const title = openingsSection!.querySelector(".dh-collapsible");
-    expect(title).not.toBeNull();
+  it("renders openings section with both splits", () => {
+    renderKingdomAnalysis(makeAnalysis());
+
+    const container = document.getElementById("kingdom-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("4/3 Split");
+    expect(text).toContain("5/2 Split");
+    expect(text).toContain("Village");
+    expect(text).toContain("Smithy");
+  });
+
+  it("shows unknown cards section when present", () => {
+    renderKingdomAnalysis(makeAnalysis({ unknown: ["FakeCard"] }));
+
+    const container = document.getElementById("kingdom-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("Not In Database");
+    expect(text).toContain("FakeCard");
+  });
+
+  it("omits unknown section when empty", () => {
+    renderKingdomAnalysis(makeAnalysis({ unknown: [] }));
+
+    const container = document.getElementById("kingdom-tab")!;
+    expect(container.textContent!).not.toContain("Not In Database");
+  });
+
+  it("shows empty state when analysis has no data", () => {
+    renderKingdomAnalysis(
+      makeAnalysis({
+        kingdom: [],
+        components: [],
+        synergies: [],
+        archetypes: [],
+        notes: [],
+        openings: { fiveTwo: [], fourThree: [] },
+      }),
+    );
+
+    const container = document.getElementById("kingdom-tab")!;
+    expect(container.textContent!).toContain("No analysis available");
   });
 });
 
-describe("draggable panel", () => {
-  it("renders the header with an id for drag handling", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const header = document.getElementById("dh-header");
-    expect(header).not.toBeNull();
+describe("renderSection", () => {
+  it("returns empty string for empty items", () => {
+    expect(renderSection("Title", [], "dh-test")).toBe("");
   });
 
-  it("header has cursor:move style in CSS class", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const header = document.getElementById("dh-header");
-    expect(header!.classList.contains("dh-header")).toBe(true);
+  it("returns empty string for undefined items", () => {
+    expect(renderSection("Title", undefined, "dh-test")).toBe("");
   });
 
-  it("mousedown on header followed by mousemove repositions the panel", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const panel = document.getElementById("dominion-helper-panel")!;
-    const header = document.getElementById("dh-header")!;
-
-    // Simulate the panel having a bounding rect
-    panel.getBoundingClientRect = () => ({
-      left: 100,
-      top: 50,
-      right: 380,
-      bottom: 450,
-      width: 280,
-      height: 400,
-      x: 100,
-      y: 50,
-      toJSON: () => {},
-    });
-
-    // Simulate mousedown on the header
-    const mousedown = new MouseEvent("mousedown", {
-      clientX: 150,
-      clientY: 60,
-      button: 0,
-    });
-    header.dispatchEvent(mousedown);
-
-    // Simulate mousemove on the document
-    const mousemove = new MouseEvent("mousemove", {
-      clientX: 250,
-      clientY: 160,
-    });
-    document.dispatchEvent(mousemove);
-
-    // Panel should have been repositioned
-    expect(panel.style.left).not.toBe("");
-    expect(panel.style.top).not.toBe("");
-    expect(panel.style.right).toBe("auto");
-
-    // Simulate mouseup
-    document.dispatchEvent(new MouseEvent("mouseup"));
-  });
-
-  it("does not drag when clicking the toggle button", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const panel = document.getElementById("dominion-helper-panel")!;
-    const toggleBtn = document.getElementById("dh-toggle-btn")!;
-
-    panel.getBoundingClientRect = () => ({
-      left: 100,
-      top: 50,
-      right: 380,
-      bottom: 450,
-      width: 280,
-      height: 400,
-      x: 100,
-      y: 50,
-      toJSON: () => {},
-    });
-
-    // Mousedown on the toggle button
-    const mousedown = new MouseEvent("mousedown", {
-      clientX: 150,
-      clientY: 60,
-      button: 0,
-      bubbles: true,
-    });
-    toggleBtn.dispatchEvent(mousedown);
-
-    // Mousemove should not reposition since drag was initiated on toggle
-    const mousemove = new MouseEvent("mousemove", {
-      clientX: 250,
-      clientY: 160,
-    });
-    document.dispatchEvent(mousemove);
-
-    // right should still be its default (not "auto")
-    expect(panel.style.right).not.toBe("auto");
+  it("renders items with the given CSS class", () => {
+    const html = renderSection("Test Title", ["item1"], "dh-synergies");
+    expect(html).toContain("dh-synergies");
+    expect(html).toContain("Test Title");
+    expect(html).toContain("item1");
   });
 });
 
-describe("main body toggle", () => {
-  it("toggle button still collapses the entire body", () => {
-    renderOverlay(["Village", "Smithy"]);
-    const toggleBtn = document.getElementById("dh-toggle-btn")!;
-    const body = document.getElementById("dh-body")!;
+describe("renderOpenings", () => {
+  it("returns empty string when both splits are empty", () => {
+    expect(renderOpenings([], [])).toBe("");
+  });
 
-    toggleBtn.click();
-    expect(body.classList.contains("dh-collapsed")).toBe(true);
+  it("renders only 4/3 split when 5/2 is empty", () => {
+    const html = renderOpenings(
+      [],
+      [{ cardName: "Silver", cost: 3, reasoning: "Money" }],
+    );
+    expect(html).toContain("4/3 Split");
+    expect(html).not.toContain("5/2 Split");
+  });
 
-    toggleBtn.click();
-    expect(body.classList.contains("dh-collapsed")).toBe(false);
+  it("renders both splits", () => {
+    const html = renderOpenings(
+      [{ cardName: "Chapel", cost: 2, reasoning: "Trash" }],
+      [{ cardName: "Silver", cost: 3, reasoning: "Money" }],
+    );
+    expect(html).toContain("4/3 Split");
+    expect(html).toContain("5/2 Split");
+    expect(html).toContain("Chapel");
+    expect(html).toContain("Silver");
+  });
+});
+
+describe("renderTracker", () => {
+  function makeTrackerData(overrides?: Partial<TrackerData>): TrackerData {
+    return {
+      players: [
+        { abbrev: "m", fullName: "muddybrown" },
+        { abbrev: "o", fullName: "opponent" },
+      ],
+      localPlayer: "m",
+      selectedPlayer: "m",
+      stats: {
+        composition: {
+          actions: 0,
+          treasures: 7,
+          victories: 3,
+          curses: 0,
+          total: 10,
+        },
+        probabilities: {
+          fivePlusCoinProb: 0.15,
+          eightPlusCoinProb: 0,
+          cardDrawProb: { Copper: 0.97, Estate: 0.83 },
+          cardsInDeck: 10,
+          cardsInDiscard: 0,
+        },
+        allCards: { Copper: 7, Estate: 3 },
+      },
+      handCount: 0,
+      playCount: 0,
+      ...overrides,
+    };
+  }
+
+  it("renders deck composition", () => {
+    renderTracker(makeTrackerData());
+
+    const container = document.getElementById("tracker-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("Treasures: 7");
+    expect(text).toContain("Victories: 3");
+    expect(text).toContain("Total: 10 cards");
+  });
+
+  it("renders card zone counts", () => {
+    renderTracker(makeTrackerData({ handCount: 5, playCount: 2 }));
+
+    const container = document.getElementById("tracker-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("Draw pile: 10");
+    expect(text).toContain("Hand: 5");
+    expect(text).toContain("In play: 2");
+  });
+
+  it("renders all owned cards alphabetically", () => {
+    renderTracker(makeTrackerData());
+
+    const container = document.getElementById("tracker-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("Copper x7");
+    expect(text).toContain("Estate x3");
+  });
+
+  it("renders player tabs for multiple players", () => {
+    renderTracker(makeTrackerData());
+
+    const container = document.getElementById("tracker-tab")!;
+    const tabs = container.querySelectorAll(".dh-tracker-tab");
+    expect(tabs.length).toBe(2);
+    expect(tabs[0].textContent).toBe("You");
+    expect(tabs[1].textContent).toBe("opponent");
+  });
+
+  it("does not render player tabs for single player", () => {
+    renderTracker(
+      makeTrackerData({
+        players: [{ abbrev: "m", fullName: "muddybrown" }],
+      }),
+    );
+
+    const container = document.getElementById("tracker-tab")!;
+    const tabs = container.querySelectorAll(".dh-tracker-tab");
+    expect(tabs.length).toBe(0);
+  });
+
+  it("renders draw probabilities", () => {
+    renderTracker(makeTrackerData());
+
+    const container = document.getElementById("tracker-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("$5+ hand: 15%");
+    expect(text).toContain("$8+ hand: 0%");
+    expect(text).toContain("Copper: 97%");
+    expect(text).toContain("Estate: 83%");
+  });
+
+  it("sends SELECT_PLAYER message when clicking a player tab", () => {
+    mockSendMessage.mockClear();
+    renderTracker(makeTrackerData());
+
+    const container = document.getElementById("tracker-tab")!;
+    const tabs = container.querySelectorAll(".dh-tracker-tab");
+    // Click the opponent tab
+    (tabs[1] as HTMLElement).click();
+
+    expect(mockSendMessage).toHaveBeenCalledWith({
+      type: "SELECT_PLAYER",
+      player: "o",
+    });
   });
 });
