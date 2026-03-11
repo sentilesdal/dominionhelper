@@ -13,7 +13,7 @@ import type { TrackerStats, SerializedTrackerStats } from "../types";
 //
 // @param map - Map to convert
 // @returns Plain object with the same key-value pairs
-function mapToRecord(map: Map<string, number>): Record<string, number> {
+export function mapToRecord(map: Map<string, number>): Record<string, number> {
   const record: Record<string, number> = {};
   for (const [key, value] of map) {
     record[key] = value;
