@@ -242,6 +242,12 @@ describe("renderTracker", () => {
       },
       handCount: 0,
       playCount: 0,
+      deckCards: { Copper: 7, Estate: 3 },
+      discardCards: {},
+      handCards: {},
+      playCards: {},
+      villageCount: 0,
+      terminalCount: 0,
       ...overrides,
     };
   }
@@ -256,23 +262,106 @@ describe("renderTracker", () => {
     expect(text).toContain("Total: 10 cards");
   });
 
-  it("renders card zone counts", () => {
-    renderTracker(makeTrackerData({ handCount: 5, playCount: 2 }));
-
-    const container = document.getElementById("tracker-tab")!;
-    const text = container.textContent!;
-    expect(text).toContain("Draw pile: 10");
-    expect(text).toContain("Hand: 5");
-    expect(text).toContain("In play: 2");
-  });
-
-  it("renders all owned cards alphabetically", () => {
+  it("renders draw pile with per-card counts", () => {
     renderTracker(makeTrackerData());
 
     const container = document.getElementById("tracker-tab")!;
     const text = container.textContent!;
+    expect(text).toContain("Draw Pile (10 cards)");
     expect(text).toContain("Copper x7");
     expect(text).toContain("Estate x3");
+  });
+
+  it("renders draw pile cards sorted by count descending", () => {
+    renderTracker(
+      makeTrackerData({
+        deckCards: { Silver: 1, Copper: 4, Estate: 2 },
+      }),
+    );
+
+    const container = document.getElementById("tracker-tab")!;
+    const deckSection = container.querySelector(".dh-tracker-deck")!;
+    const items = deckSection.querySelectorAll(".dh-card-list-item");
+    expect(items[0].textContent).toBe("Copper x4");
+    expect(items[1].textContent).toBe("Estate x2");
+    expect(items[2].textContent).toBe("Silver x1");
+  });
+
+  it("renders discard pile with per-card counts", () => {
+    renderTracker(
+      makeTrackerData({
+        discardCards: { Copper: 3, Estate: 1 },
+        stats: {
+          composition: {
+            actions: 0,
+            treasures: 7,
+            victories: 3,
+            curses: 0,
+            total: 10,
+          },
+          probabilities: {
+            fivePlusCoinProb: 0.15,
+            eightPlusCoinProb: 0,
+            cardDrawProb: { Copper: 0.97, Estate: 0.83 },
+            cardsInDeck: 6,
+            cardsInDiscard: 4,
+          },
+          allCards: { Copper: 7, Estate: 3 },
+        },
+      }),
+    );
+
+    const container = document.getElementById("tracker-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("Discard Pile (4 cards)");
+    expect(text).toContain("Copper x3");
+  });
+
+  it("shows empty label when discard pile is empty", () => {
+    renderTracker(makeTrackerData({ discardCards: {} }));
+
+    const container = document.getElementById("tracker-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("Discard Pile (empty)");
+  });
+
+  it("renders village and terminal ratio", () => {
+    renderTracker(makeTrackerData({ villageCount: 2, terminalCount: 3 }));
+
+    const container = document.getElementById("tracker-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("Villages: 2");
+    expect(text).toContain("Terminals: 3");
+  });
+
+  it("renders hand cards", () => {
+    renderTracker(
+      makeTrackerData({
+        handCards: { Copper: 3, Estate: 2 },
+        handCount: 5,
+      }),
+    );
+
+    const container = document.getElementById("tracker-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("Hand (5)");
+    expect(text).toContain("Copper x3");
+    expect(text).toContain("Estate x2");
+  });
+
+  it("renders play area cards", () => {
+    renderTracker(
+      makeTrackerData({
+        playCards: { Village: 1, Smithy: 1 },
+        playCount: 2,
+      }),
+    );
+
+    const container = document.getElementById("tracker-tab")!;
+    const text = container.textContent!;
+    expect(text).toContain("In Play (2)");
+    expect(text).toContain("Village x1");
+    expect(text).toContain("Smithy x1");
   });
 
   it("renders player tabs for multiple players", () => {
@@ -306,6 +395,28 @@ describe("renderTracker", () => {
     expect(text).toContain("$8+ hand: 0%");
     expect(text).toContain("Copper: 97%");
     expect(text).toContain("Estate: 83%");
+  });
+
+  it("draw pile and discard pile sections are collapsible", () => {
+    renderTracker(makeTrackerData());
+
+    const container = document.getElementById("tracker-tab")!;
+    const deckTitle = container.querySelector(
+      ".dh-tracker-deck .dh-collapsible",
+    ) as HTMLElement;
+    const targetId = deckTitle.getAttribute("data-target")!;
+    const content = document.getElementById(targetId)!;
+
+    // Starts expanded
+    expect(content.classList.contains("dh-section-collapsed")).toBe(false);
+
+    // Click to collapse
+    deckTitle.click();
+    expect(content.classList.contains("dh-section-collapsed")).toBe(true);
+
+    // Click to expand again
+    deckTitle.click();
+    expect(content.classList.contains("dh-section-collapsed")).toBe(false);
   });
 
   it("sends SELECT_PLAYER message when clicking a player tab", () => {

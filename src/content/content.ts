@@ -37,7 +37,7 @@ import {
   applySnapshot,
 } from "../tracker/deck-state";
 import { calculateStats } from "../tracker/stats";
-import { serializeTrackerStats } from "./serialize";
+import { serializeTrackerStats, mapToRecord } from "./serialize";
 import cardData from "../data/cards.json";
 
 // Build a card database map for O(1) lookups by name.
@@ -155,6 +155,18 @@ function sendTrackerUpdate(): void {
     fullName: gameState.playerNames.get(abbrev) || abbrev,
   }));
 
+  // Count villages and terminals across the player's full deck
+  let villageCount = 0;
+  let terminalCount = 0;
+  for (const [cardName, count] of stats.allCards) {
+    const card = CARD_DB.get(cardName);
+    if (!card) continue;
+    if (card.tags.includes("village")) villageCount += count;
+    if (card.isTerminal && card.types.includes("Action")) {
+      terminalCount += count;
+    }
+  }
+
   const trackerData: TrackerData = {
     players,
     localPlayer: gameState.localPlayer,
@@ -162,6 +174,12 @@ function sendTrackerUpdate(): void {
     stats: serializeTrackerStats(stats),
     handCount: zoneTotal(zones.hand),
     playCount: zoneTotal(zones.play),
+    deckCards: mapToRecord(zones.deck),
+    discardCards: mapToRecord(zones.discard),
+    handCards: mapToRecord(zones.hand),
+    playCards: mapToRecord(zones.play),
+    villageCount,
+    terminalCount,
   };
 
   chrome.runtime.sendMessage({

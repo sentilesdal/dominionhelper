@@ -221,15 +221,38 @@ function formatProb(prob: number): string {
   return Math.round(prob * 100) + "%";
 }
 
+// Renders a per-card list sorted by count descending, then alphabetically.
+// Each card appears on its own line as "CardName x3".
+//
+// @param cards - Record of card name to count
+// @returns HTML string with one div per card
+function renderCardList(cards: Record<string, number>): string {
+  const entries = Object.entries(cards).sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
+  return entries
+    .map(
+      ([name, count]) =>
+        `<div class="dh-card-list-item">${escapeHtml(name)} x${count}</div>`,
+    )
+    .join("");
+}
+
 // Renders the deck tracker into the tracker tab pane. Called when a
-// TRACKER_UPDATE message is received.
+// TRACKER_UPDATE message is received. Layout order (most to least important):
+// 1. Player tabs, 2. Draw pile, 3. Village/terminal ratio,
+// 4. Discard pile, 5. Hand/in play, 6. Draw probabilities, 7. Deck composition
 //
 // @param data - Serialized tracker data with stats for the selected player
 export function renderTracker(data: TrackerData): void {
   const container = document.getElementById("tracker-tab");
   if (!container) return;
 
-  const { stats, handCount, playCount } = data;
+  // Reset section counter for stable collapsible IDs
+  sectionIdCounter = 0;
+
+  const { stats } = data;
+  const p = stats.probabilities;
 
   let html = "";
 
@@ -248,65 +271,129 @@ export function renderTracker(data: TrackerData): void {
     html += "</div>";
   }
 
-  // Deck composition
-  const c = stats.composition;
+  // Draw pile — collapsible, starts expanded, shows per-card counts
+  const deckSectionId = `dh-sec-${sectionIdCounter++}`;
+  const deckCount = p.cardsInDeck;
+  const deckListHtml =
+    Object.keys(data.deckCards).length > 0
+      ? renderCardList(data.deckCards)
+      : '<div class="dh-card-list-item dh-empty-zone">(empty)</div>';
   html += `
-    <div class="dh-section dh-tracker-composition">
-      <div class="dh-section-title">Deck Composition</div>
-      <div class="dh-tracker-stats-grid">
-        <span class="dh-tracker-stat">Actions: ${c.actions}</span>
-        <span class="dh-tracker-stat">Treasures: ${c.treasures}</span>
-        <span class="dh-tracker-stat">Victories: ${c.victories}</span>
-        <span class="dh-tracker-stat">Curses: ${c.curses}</span>
+    <div class="dh-section dh-tracker-deck">
+      <div class="dh-section-title dh-collapsible" data-target="${deckSectionId}">
+        <span class="dh-collapse-arrow">&#9660;</span>
+        Draw Pile (${deckCount} ${deckCount === 1 ? "card" : "cards"})
       </div>
-      <div class="dh-tracker-total">Total: ${c.total} cards</div>
+      <div class="dh-section-content dh-card-list" id="${deckSectionId}">
+        ${deckListHtml}
+      </div>
     </div>
   `;
 
-  // Card zones
-  const p = stats.probabilities;
+  // Village / terminal ratio
   html += `
-    <div class="dh-section dh-tracker-zones">
-      <div class="dh-section-title">Card Zones</div>
-      <div class="dh-item">Draw pile: ${p.cardsInDeck} cards</div>
-      <div class="dh-item">Discard: ${p.cardsInDiscard} cards</div>
-      <div class="dh-item">Hand: ${handCount} / In play: ${playCount}</div>
+    <div class="dh-section dh-tracker-ratio">
+      <div class="dh-ratio-line">Villages: ${data.villageCount} / Terminals: ${data.terminalCount}</div>
+    </div>
+  `;
+
+  // Discard pile — collapsible, starts expanded
+  const discardSectionId = `dh-sec-${sectionIdCounter++}`;
+  const discardCount = p.cardsInDiscard;
+  const discardLabel =
+    discardCount === 0
+      ? "Discard Pile (empty)"
+      : `Discard Pile (${discardCount} ${discardCount === 1 ? "card" : "cards"})`;
+  const discardListHtml =
+    Object.keys(data.discardCards).length > 0
+      ? renderCardList(data.discardCards)
+      : '<div class="dh-card-list-item dh-empty-zone">(empty)</div>';
+  html += `
+    <div class="dh-section dh-tracker-discard">
+      <div class="dh-section-title dh-collapsible" data-target="${discardSectionId}">
+        <span class="dh-collapse-arrow">&#9660;</span>
+        ${escapeHtml(discardLabel)}
+      </div>
+      <div class="dh-section-content dh-card-list" id="${discardSectionId}">
+        ${discardListHtml}
+      </div>
+    </div>
+  `;
+
+  // Hand / In play — two sub-lists with per-card counts
+  const handSectionId = `dh-sec-${sectionIdCounter++}`;
+  const handListHtml =
+    Object.keys(data.handCards).length > 0
+      ? renderCardList(data.handCards)
+      : '<div class="dh-card-list-item dh-empty-zone">(empty)</div>';
+  const playListHtml =
+    Object.keys(data.playCards).length > 0
+      ? renderCardList(data.playCards)
+      : '<div class="dh-card-list-item dh-empty-zone">(empty)</div>';
+  html += `
+    <div class="dh-section dh-tracker-hand">
+      <div class="dh-section-title dh-collapsible" data-target="${handSectionId}">
+        <span class="dh-collapse-arrow">&#9660;</span>
+        Hand / In Play
+      </div>
+      <div class="dh-section-content" id="${handSectionId}">
+        <div class="dh-sub-label">Hand (${data.handCount})</div>
+        <div class="dh-card-list">${handListHtml}</div>
+        <div class="dh-sub-label">In Play (${data.playCount})</div>
+        <div class="dh-card-list">${playListHtml}</div>
+      </div>
     </div>
   `;
 
   // Draw probabilities
-  html += `
-    <div class="dh-section dh-tracker-probs">
-      <div class="dh-section-title">Draw Probabilities</div>
-      <div class="dh-item">$5+ hand: ${formatProb(p.fivePlusCoinProb)}</div>
-      <div class="dh-item">$8+ hand: ${formatProb(p.eightPlusCoinProb)}</div>
+  const probsSectionId = `dh-sec-${sectionIdCounter++}`;
+  let probsHtml = `
+    <div class="dh-item">$5+ hand: ${formatProb(p.fivePlusCoinProb)}</div>
+    <div class="dh-item">$8+ hand: ${formatProb(p.eightPlusCoinProb)}</div>
   `;
-
   // Per-card draw probabilities, sorted descending, top 8
   const cardProbs = Object.entries(p.cardDrawProb).sort((a, b) => b[1] - a[1]);
   const topCards = cardProbs.slice(0, 8);
   for (const [card, prob] of topCards) {
-    html += `<div class="dh-item">${escapeHtml(card)}: ${formatProb(prob)}</div>`;
+    probsHtml += `<div class="dh-item">${escapeHtml(card)}: ${formatProb(prob)}</div>`;
   }
-  html += "</div>";
-
-  // All cards
-  const allCardsEntries = Object.entries(stats.allCards).sort((a, b) =>
-    a[0].localeCompare(b[0]),
-  );
-  if (allCardsEntries.length > 0) {
-    const cardList = allCardsEntries
-      .map(([name, count]) => `${escapeHtml(name)} x${count}`)
-      .join(", ");
-    html += `
-      <div class="dh-section dh-tracker-allcards">
-        <div class="dh-section-title">All Cards</div>
-        <div class="dh-item">${cardList}</div>
+  html += `
+    <div class="dh-section dh-tracker-probs">
+      <div class="dh-section-title dh-collapsible" data-target="${probsSectionId}">
+        <span class="dh-collapse-arrow">&#9660;</span>
+        Draw Probabilities
       </div>
-    `;
-  }
+      <div class="dh-section-content" id="${probsSectionId}">
+        ${probsHtml}
+      </div>
+    </div>
+  `;
+
+  // Deck composition
+  const compSectionId = `dh-sec-${sectionIdCounter++}`;
+  const c = stats.composition;
+  html += `
+    <div class="dh-section dh-tracker-composition">
+      <div class="dh-section-title dh-collapsible" data-target="${compSectionId}">
+        <span class="dh-collapse-arrow">&#9660;</span>
+        Deck Composition
+      </div>
+      <div class="dh-section-content" id="${compSectionId}">
+        <div class="dh-tracker-stats-grid">
+          <span class="dh-tracker-stat">Actions: ${c.actions}</span>
+          <span class="dh-tracker-stat">Treasures: ${c.treasures}</span>
+          <span class="dh-tracker-stat">Victories: ${c.victories}</span>
+          <span class="dh-tracker-stat">Curses: ${c.curses}</span>
+        </div>
+        <div class="dh-tracker-total">Total: ${c.total} cards</div>
+      </div>
+    </div>
+  `;
 
   container.innerHTML = html;
+
+  // Attach collapsible section handlers for draw pile, discard, etc.
+  attachCollapsibleHandlers(container);
 
   // Attach player tab click handlers — send message to content script
   // to switch the selected player, which will trigger a new TRACKER_UPDATE

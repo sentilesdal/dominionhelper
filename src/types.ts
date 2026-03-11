@@ -342,4 +342,12 @@ export interface TrackerData {
   handCount: number;
   // Number of cards in the selected player's play area
   playCount: number;
+  // Per-card counts in each zone (card name -> count)
+  deckCards: Record<string, number>;
+  discardCards: Record<string, number>;
+  handCards: Record<string, number>;
+  playCards: Record<string, number>;
+  // Village vs terminal action counts across the player's full deck
+  villageCount: number;
+  terminalCount: number;
 }

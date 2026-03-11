@@ -199,10 +199,57 @@ body {
 }
 
 /* Section title colors for tracker sections */
-.dh-tracker-composition .dh-section-title { color: #4fc3f7; }
-.dh-tracker-zones .dh-section-title { color: #aed581; }
+.dh-tracker-deck .dh-section-title { color: #aed581; }
+.dh-tracker-discard .dh-section-title { color: #ffb74d; }
+.dh-tracker-hand .dh-section-title { color: #4fc3f7; }
 .dh-tracker-probs .dh-section-title { color: #fff176; }
-.dh-tracker-allcards .dh-section-title { color: #b0bec5; }
+.dh-tracker-composition .dh-section-title { color: #b0bec5; }
+
+/* Per-card list inside draw/discard/hand/play sections */
+.dh-card-list {
+  padding: 2px 0;
+}
+
+.dh-card-list-item {
+  padding: 1px 0;
+  line-height: 1.4;
+  color: #ccc;
+  font-size: 11px;
+}
+
+.dh-empty-zone {
+  color: #666;
+  font-style: italic;
+}
+
+/* Sub-labels for hand/play within the combined section */
+.dh-sub-label {
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #999;
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
+
+.dh-sub-label:first-child {
+  margin-top: 0;
+}
+
+/* Village / terminal ratio line */
+.dh-tracker-ratio {
+  margin-bottom: 10px;
+}
+
+.dh-ratio-line {
+  display: flex;
+  gap: 4px;
+  color: #ce93d8;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 0;
+}
 
 /* Stats grid: 2-column layout for composition numbers */
 .dh-tracker-stats-grid {
