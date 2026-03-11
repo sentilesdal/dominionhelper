@@ -34,7 +34,8 @@ import {
   processLogEntry,
   processTurnChange,
   resetGameState,
-  applySnapshot,
+  applySnapshotMetadata,
+  buildHybridZones,
 } from "../tracker/deck-state";
 import { calculateStats } from "../tracker/stats";
 import { serializeTrackerStats, mapToRecord } from "./serialize";
@@ -92,6 +93,10 @@ let gameState = createGameState();
 // zone data and log parsing only needs to track ownership changes.
 let bridgeActive = false;
 
+// Stores the most recent Angular snapshot for use by buildHybridZones().
+// Updated every time the bridge dispatches a state change event.
+let latestSnapshot: GameStateSnapshot | null = null;
+
 // Currently selected player for the tracker (persists across re-renders).
 // Defaults to the local player when first detected.
 let selectedPlayer = "";
@@ -144,7 +149,17 @@ function sendTrackerUpdate(): void {
       gameState.localPlayer || (gameState.players.keys().next().value ?? "");
   }
 
-  const zones = gameState.players.get(selectedPlayer);
+  // When the Angular bridge is active, use buildHybridZones() to produce
+  // accurate zone data. This combines Angular ground truth (hand, play, trash)
+  // with log-based ownership tracking to infer draw pile composition.
+  // Without the bridge, fall back to raw log-parsed zones.
+  let zones;
+  if (bridgeActive && latestSnapshot) {
+    const hybridMap = buildHybridZones(gameState, latestSnapshot);
+    zones = hybridMap.get(selectedPlayer);
+  } else {
+    zones = gameState.players.get(selectedPlayer);
+  }
   if (!zones) return;
 
   const stats = calculateStats(zones, CARD_DB);
@@ -205,6 +220,7 @@ function onLogUpdate(lines: string[]): void {
     if (isGameStart(line) && gameState.currentTurn > 0) {
       gameState = resetGameState();
       bridgeActive = false;
+      latestSnapshot = null;
       selectedPlayer = "";
       changed = true;
     }
@@ -239,15 +255,21 @@ observeGameLog(onLogUpdate);
 
 // Listen for game state snapshots from the MAIN-world bridge script.
 // The bridge polls Angular every 500ms and dispatches a CustomEvent only
-// when the state changes. We use this to apply ground-truth zone data.
+// when the state changes. We store the snapshot and update metadata, then
+// sendTrackerUpdate() uses buildHybridZones() to merge Angular ground truth
+// with log-based ownership tracking for accurate zone data.
 window.addEventListener("dominion-helper-game-state", (e: Event) => {
   const snapshot = (e as CustomEvent).detail as GameStateSnapshot;
 
   // Mark bridge as active on first snapshot — enables hybrid rendering
   bridgeActive = true;
 
-  // Apply Angular's ground truth data to our game state
-  applySnapshot(gameState, snapshot);
+  // Store snapshot for use by buildHybridZones() in sendTrackerUpdate()
+  latestSnapshot = snapshot;
+
+  // Update metadata (turn, local player, name mappings) without touching
+  // zone card data — log-based zones must stay pure for ownership tracking
+  applySnapshotMetadata(gameState, snapshot);
 
   // Send updated tracker data to the side panel
   sendTrackerUpdate();

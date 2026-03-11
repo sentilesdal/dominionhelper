@@ -8,7 +8,7 @@ import {
   resetGameState,
   getAllOwnedCards,
   deriveAbbrev,
-  applySnapshot,
+  applySnapshotMetadata,
   inferDrawPile,
   buildHybridZones,
 } from "../src/tracker/deck-state";
@@ -321,7 +321,7 @@ function makeSnapshot(
   return { players, turnNumber };
 }
 
-describe("applySnapshot", () => {
+describe("applySnapshotMetadata", () => {
   it("sets localPlayer from isMe flag", () => {
     const state = createGameState();
     const snapshot = makeSnapshot([
@@ -333,15 +333,15 @@ describe("applySnapshot", () => {
       },
     ]);
 
-    applySnapshot(state, snapshot);
+    applySnapshotMetadata(state, snapshot);
 
     expect(state.localPlayer).toBe("m");
   });
 
-  it("overwrites hand zone with exact Angular data", () => {
+  it("does not modify zone card data", () => {
     const state = createGameState();
-    // Set up log-based hand data
     processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+    processLogEntry(state, makeEntry("m", "starts-with", ["Estate"], [3]));
     processLogEntry(state, makeEntry("m", "draws", ["Copper"], [5]));
 
     const snapshot = makeSnapshot([
@@ -359,34 +359,16 @@ describe("applySnapshot", () => {
       },
     ]);
 
-    applySnapshot(state, snapshot);
+    applySnapshotMetadata(state, snapshot);
 
+    // Zone data should remain as log parsing left it, NOT be overwritten
     const zones = state.players.get("m")!;
-    expect(zones.hand.get("Copper")).toBe(3);
-    expect(zones.hand.get("Silver")).toBe(1);
-    expect(zones.hand.get("Estate")).toBe(1);
-  });
-
-  it("overwrites play zone with exact Angular data", () => {
-    const state = createGameState();
-    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
-
-    const snapshot = makeSnapshot([
-      {
-        name: "muddybrown",
-        initials: "m",
-        isMe: true,
-        zones: [
-          { zoneName: "InPlayZone", cards: ["Village", "Smithy"], count: 2 },
-        ],
-      },
-    ]);
-
-    applySnapshot(state, snapshot);
-
-    const zones = state.players.get("m")!;
-    expect(zones.play.get("Village")).toBe(1);
-    expect(zones.play.get("Smithy")).toBe(1);
+    expect(zones.deck.get("Copper")).toBe(2);
+    expect(zones.deck.get("Estate")).toBe(3);
+    expect(zones.hand.get("Copper")).toBe(5);
+    // Silver and Estate should NOT appear in hand (Angular data not applied)
+    expect(zones.hand.has("Silver")).toBe(false);
+    expect(zones.hand.has("Estate")).toBe(false);
   });
 
   it("updates turn number from snapshot", () => {
@@ -396,7 +378,7 @@ describe("applySnapshot", () => {
       5,
     );
 
-    applySnapshot(state, snapshot);
+    applySnapshotMetadata(state, snapshot);
 
     expect(state.currentTurn).toBe(5);
   });
@@ -408,7 +390,7 @@ describe("applySnapshot", () => {
       { name: "opponent42", initials: "o", isMe: false, zones: [] },
     ]);
 
-    applySnapshot(state, snapshot);
+    applySnapshotMetadata(state, snapshot);
 
     expect(state.playerNames.get("m")).toBe("muddybrown");
     expect(state.playerNames.get("o")).toBe("opponent42");
@@ -416,7 +398,6 @@ describe("applySnapshot", () => {
 
   it("uses existing abbreviation when player name already mapped", () => {
     const state = createGameState();
-    // Pre-populate from log processing
     state.playerNames.set("m", "muddybrown");
     processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
 
@@ -431,11 +412,24 @@ describe("applySnapshot", () => {
       },
     ]);
 
-    applySnapshot(state, snapshot);
+    applySnapshotMetadata(state, snapshot);
 
     // Should use existing "m" abbreviation, not create a new one
     expect(state.players.has("m")).toBe(true);
-    expect(state.players.get("m")!.hand.get("Copper")).toBe(2);
+    // Zone data should NOT be modified — deck still has log data
+    expect(state.players.get("m")!.deck.get("Copper")).toBe(7);
+  });
+
+  it("ensures player zones exist even without log entries", () => {
+    const state = createGameState();
+    const snapshot = makeSnapshot([
+      { name: "newplayer", initials: "n", isMe: false, zones: [] },
+    ]);
+
+    applySnapshotMetadata(state, snapshot);
+
+    expect(state.players.has("n")).toBe(true);
+    expect(state.players.get("n")!.deck.size).toBe(0);
   });
 });
 
@@ -636,5 +630,85 @@ describe("buildHybridZones", () => {
     expect(hybrid.get("m")!.deck.get("Copper")).toBe(5);
     expect(hybrid.get("o")!.hand.get("Copper")).toBe(3);
     expect(hybrid.get("o")!.deck.get("Copper")).toBe(4);
+  });
+
+  it("splits pool between deck and discard when discard is non-empty", () => {
+    const state = createGameState();
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+    processLogEntry(state, makeEntry("m", "starts-with", ["Estate"], [3]));
+    state.playerNames.set("m", "muddybrown");
+
+    const snapshot = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          { zoneName: "HandZone", cards: ["Copper", "Copper"], count: 2 },
+          { zoneName: "InPlayZone", cards: [], count: 0 },
+          { zoneName: "DrawZone", cards: [], count: 3 },
+          { zoneName: "DiscardZone", cards: [], count: 5 },
+          { zoneName: "TrashZone", cards: [], count: 0 },
+        ],
+      },
+    ]);
+
+    const hybrid = buildHybridZones(state, snapshot);
+    const zones = hybrid.get("m")!;
+
+    // Pool = 10 - 2 (hand) = 8 cards total (deck 3 + discard 5)
+    let deckTotal = 0;
+    for (const count of zones.deck.values()) deckTotal += count;
+    let discardTotal = 0;
+    for (const count of zones.discard.values()) discardTotal += count;
+
+    // Zone totals must match Angular counts
+    expect(deckTotal).toBe(3);
+    expect(discardTotal).toBe(5);
+  });
+
+  it("correctly infers deck even when log parsing is behind Angular", () => {
+    // This tests the core bug fix: Angular reports 5 cards in hand,
+    // but log parsing hasn't processed the draw entries yet, so the
+    // log zones still have all 10 cards in deck and 0 in hand.
+    const state = createGameState();
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+    processLogEntry(state, makeEntry("m", "starts-with", ["Estate"], [3]));
+    // Note: NO draw entries processed — simulating the race condition
+    state.playerNames.set("m", "muddybrown");
+
+    const snapshot = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          {
+            zoneName: "HandZone",
+            cards: ["Copper", "Copper", "Copper", "Copper", "Copper"],
+            count: 5,
+          },
+          { zoneName: "InPlayZone", cards: [], count: 0 },
+          { zoneName: "DrawZone", cards: [], count: 5 },
+          { zoneName: "DiscardZone", cards: [], count: 0 },
+          { zoneName: "TrashZone", cards: [], count: 0 },
+        ],
+      },
+    ]);
+
+    const hybrid = buildHybridZones(state, snapshot);
+    const zones = hybrid.get("m")!;
+
+    // Hand from Angular: 5 Coppers
+    expect(zones.hand.get("Copper")).toBe(5);
+
+    // Deck should be inferred: total(10) - hand(5) = 5 cards
+    // Remaining: 2 Coppers + 3 Estates
+    expect(zones.deck.get("Copper")).toBe(2);
+    expect(zones.deck.get("Estate")).toBe(3);
+
+    let deckTotal = 0;
+    for (const count of zones.deck.values()) deckTotal += count;
+    expect(deckTotal).toBe(5);
   });
 });

@@ -15,7 +15,7 @@
 // - starts-with: (new card) → deck
 //
 // Key exports: createGameState, processLogEntry, processTurnChange,
-//   applySnapshot, inferDrawPile, buildHybridZones
+//   applySnapshotMetadata, inferDrawPile, buildHybridZones
 //
 // @module deck-state
 
@@ -349,28 +349,20 @@ export function getAllOwnedCards(zones: PlayerZones): Map<string, number> {
 // zone counts and visible cards) with log-based ownership tracking to
 // produce accurate deck composition.
 
-// Maps Angular zone names to our internal CardZone type.
-// Angular uses "HandZone", "DrawZone", etc. while we use "hand", "deck", etc.
-const ANGULAR_ZONE_MAP: Record<string, CardZone> = {
-  HandZone: "hand",
-  InPlayZone: "play",
-  DrawZone: "deck",
-  DiscardZone: "discard",
-  TrashZone: "trash",
-};
-
-// Applies an Angular game state snapshot to the existing game state.
-// Updates localPlayer, player name mappings, and overwrites hand/play zones
-// with exact card lists from Angular (ground truth). Also stores deck and
-// discard counts for use by inferDrawPile.
+// Updates game state metadata from an Angular snapshot without modifying
+// zone card data. Sets turn number, local player, name mappings, and
+// ensures player zone entries exist. Zone card data is left untouched
+// so that log-based ownership tracking remains accurate for use by
+// buildHybridZones().
 //
-// This function is called every time the bridge dispatches a state change event.
-// It does NOT rebuild the deck/discard contents — that's done by buildHybridZones.
+// This replaces the old applySnapshot() which mixed Angular zone data
+// into log-tracked zones, corrupting the total ownership count and
+// causing stale deck/hand displays.
 //
 // @param state - Current game state (mutated in place)
 // @param snapshot - Angular game state snapshot from the bridge
 // @returns The updated game state
-export function applySnapshot(
+export function applySnapshotMetadata(
   state: GameState,
   snapshot: GameStateSnapshot,
 ): GameState {
@@ -384,22 +376,8 @@ export function applySnapshot(
       state.localPlayer = abbrev;
     }
 
-    const zones = ensurePlayer(state, abbrev);
-
-    for (const zone of player.zones) {
-      const ourZone = ANGULAR_ZONE_MAP[zone.zoneName];
-      if (!ourZone) continue;
-
-      // For visible zones (hand, play, trash), overwrite with exact card lists
-      if (ourZone === "hand" || ourZone === "play" || ourZone === "trash") {
-        zones[ourZone].clear();
-        for (const card of zone.cards) {
-          addToZone(zones[ourZone], card, 1);
-        }
-      }
-      // For deck and discard, store the count but don't change card-level data
-      // (we don't know which specific cards are in the draw pile or discard)
-    }
+    // Ensure zones exist so log entries can populate them
+    ensurePlayer(state, abbrev);
   }
 
   return state;
@@ -552,16 +530,29 @@ export function buildHybridZones(
       discardCount,
     );
 
-    // When discard is empty, all pool cards are in the draw pile
+    // Split pool between deck and discard using Angular's counts.
+    // When discard is empty, all pool cards are in the draw pile (exact).
+    // When discard is non-empty, we can't know which specific cards are
+    // where, so we fill deck first up to deckCount and put the rest in
+    // discard. The per-card assignment is approximate but the zone totals
+    // match Angular's ground truth, giving correct draw probabilities.
     if (discardCount === 0) {
       for (const [card, count] of deckPool) {
         addToZone(hybrid.deck, card, count);
       }
     } else {
-      // We know the counts but not exact split — put all in deck as best guess
-      // The deckCount and discardCount from Angular are still available for stats
+      let remaining = deckCount;
       for (const [card, count] of deckPool) {
-        addToZone(hybrid.deck, card, count);
+        if (remaining >= count) {
+          addToZone(hybrid.deck, card, count);
+          remaining -= count;
+        } else if (remaining > 0) {
+          addToZone(hybrid.deck, card, remaining);
+          addToZone(hybrid.discard, card, count - remaining);
+          remaining = 0;
+        } else {
+          addToZone(hybrid.discard, card, count);
+        }
       }
     }
 
