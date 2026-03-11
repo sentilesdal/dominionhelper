@@ -292,3 +292,54 @@ export interface TrackerStats {
   // All cards the player owns (across all non-trash zones), name → total count
   allCards: Map<string, number>;
 }
+
+// ─── Side Panel Message Types ───────────────────────────────────────
+//
+// Serializable data structures sent from the content script to the
+// service worker and then forwarded to the side panel. Maps and other
+// non-serializable types are converted to plain objects/arrays before
+// message passing.
+
+// Serializable version of DrawProbabilities for message passing.
+// Replaces Map<string, number> with a plain object.
+export interface SerializedDrawProbabilities {
+  fivePlusCoinProb: number;
+  eightPlusCoinProb: number;
+  // Per-card draw probability as a plain object (card name → probability)
+  cardDrawProb: Record<string, number>;
+  cardsInDeck: number;
+  cardsInDiscard: number;
+}
+
+// Serializable version of TrackerStats for message passing.
+// Replaces Maps with plain objects so data survives chrome.runtime.sendMessage.
+export interface SerializedTrackerStats {
+  composition: DeckComposition;
+  probabilities: SerializedDrawProbabilities;
+  // All owned cards as a plain object (card name → count)
+  allCards: Record<string, number>;
+}
+
+// Player info for the tracker panel, sent as part of TrackerData.
+export interface TrackerPlayer {
+  abbrev: string;
+  fullName: string;
+}
+
+// Complete tracker data sent from the content script to the side panel
+// via the service worker. Contains everything needed to render the
+// deck tracker tab without access to the content script's GameState.
+export interface TrackerData {
+  // List of players in the game with their abbreviations and full names
+  players: TrackerPlayer[];
+  // Abbreviation of the local player (the one at the bottom of the screen)
+  localPlayer: string;
+  // Currently selected player abbreviation
+  selectedPlayer: string;
+  // Calculated stats for the selected player
+  stats: SerializedTrackerStats;
+  // Number of cards in the selected player's hand
+  handCount: number;
+  // Number of cards in the selected player's play area
+  playCount: number;
+}

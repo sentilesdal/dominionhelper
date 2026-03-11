@@ -5,14 +5,13 @@
 // is bundled separately into IIFE format.
 //
 // Four builds are performed:
-// 1. Content script — bundles all analysis + content modules + card data into one file
-// 2. Service worker — standalone background script
-// 3. Popup — standalone popup script
+// 1. Content script — bundles all content + tracker + card data into one file
+// 2. Service worker — background script with analysis engine + card data
+// 3. Side panel — renders kingdom analysis and deck tracker in the sidebar
 // 4. Game state bridge — MAIN-world script that reads Angular game state
 //
 // After bundling, static assets (CSS, HTML, icons) are copied to dist/
-// and a new manifest.json is generated with dist-relative paths (single
-// content script bundle instead of the 7 separate files in the source manifest).
+// and a new manifest.json is generated with dist-relative paths.
 
 import { build } from "vite";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -70,10 +69,18 @@ async function main() {
   await chromeExtBuild("src/content/content.ts", "content.js");
 
   console.log("Building service worker...");
-  await chromeExtBuild("src/background/service-worker.ts", "service-worker.js");
+  await chromeExtBuild(
+    "src/background/service-worker.ts",
+    "service-worker.js",
+    "DominionHelperSW",
+  );
 
-  console.log("Building popup script...");
-  await chromeExtBuild("src/popup/popup.ts", "popup.js");
+  console.log("Building side panel...");
+  await chromeExtBuild(
+    "src/sidepanel/sidepanel.ts",
+    "sidepanel.js",
+    "DominionHelperSidePanel",
+  );
 
   // Bridge runs in MAIN world to access Angular — needs a unique IIFE name
   // to avoid colliding with the content script's "DominionHelper" global
@@ -88,20 +95,16 @@ async function main() {
   console.log("Copying static assets...");
   cpSync(resolve(root, "icons"), resolve(dist, "icons"), { recursive: true });
   copyFileSync(
-    resolve(root, "src/content/overlay.css"),
-    resolve(dist, "overlay.css"),
+    resolve(root, "src/sidepanel/sidepanel.html"),
+    resolve(dist, "sidepanel.html"),
   );
   copyFileSync(
-    resolve(root, "src/popup/popup.html"),
-    resolve(dist, "popup.html"),
-  );
-  copyFileSync(
-    resolve(root, "src/popup/popup.css"),
-    resolve(dist, "popup.css"),
+    resolve(root, "src/sidepanel/sidepanel.css"),
+    resolve(dist, "sidepanel.css"),
   );
 
-  // Generate dist/manifest.json from the source manifest, replacing the
-  // 7 individual content script files with the single bundled content.js
+  // Generate dist/manifest.json from the source manifest, replacing
+  // source paths with dist-relative bundled output paths
   const srcManifest = JSON.parse(
     readFileSync(resolve(root, "manifest.json"), "utf-8"),
   );
@@ -111,7 +114,6 @@ async function main() {
       {
         matches: srcManifest.content_scripts[0].matches,
         js: ["content.js"],
-        css: ["overlay.css"],
         run_at: "document_idle",
       },
       {
@@ -124,8 +126,10 @@ async function main() {
     background: {
       service_worker: "service-worker.js",
     },
+    side_panel: {
+      default_path: "sidepanel.html",
+    },
     action: {
-      default_popup: "popup.html",
       default_icon: {
         16: "icons/icon16.png",
         48: "icons/icon48.png",
@@ -141,13 +145,6 @@ async function main() {
   writeFileSync(
     resolve(dist, "manifest.json"),
     JSON.stringify(distManifest, null, 2),
-  );
-
-  // Copy popup.html as-is (script src already points to popup.js)
-  const popupHtml = readFileSync(resolve(dist, "popup.html"), "utf-8");
-  writeFileSync(
-    resolve(dist, "popup.html"),
-    popupHtml.replace('src="popup.js"', 'src="popup.js"'),
   );
 
   console.log("Build complete! Extension ready in dist/");

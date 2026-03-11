@@ -412,10 +412,7 @@ export function applySnapshot(
 // @param player - Player snapshot from Angular
 // @param state - Current game state with existing name mappings
 // @returns The abbreviation string used in our state maps
-function findAbbrevForPlayer(
-  player: PlayerSnapshot,
-  state: GameState,
-): string {
+function findAbbrevForPlayer(player: PlayerSnapshot, state: GameState): string {
   // Check if we already have a mapping by full name
   for (const [abbrev, name] of state.playerNames) {
     if (name === player.name) return abbrev;
@@ -434,10 +431,7 @@ function findAbbrevForPlayer(
 // @param player - Player snapshot from Angular
 // @param zoneName - Angular zone name (e.g., "DrawZone", "DiscardZone")
 // @returns Card count in that zone, or 0 if zone not found
-function getAngularZoneCount(
-  player: PlayerSnapshot,
-  zoneName: string,
-): number {
+function getAngularZoneCount(player: PlayerSnapshot, zoneName: string): number {
   const zone = player.zones.find((z) => z.zoneName === zoneName);
   return zone ? zone.count : 0;
 }

@@ -350,7 +350,11 @@ describe("applySnapshot", () => {
         initials: "m",
         isMe: true,
         zones: [
-          { zoneName: "HandZone", cards: ["Copper", "Copper", "Copper", "Silver", "Estate"], count: 5 },
+          {
+            zoneName: "HandZone",
+            cards: ["Copper", "Copper", "Copper", "Silver", "Estate"],
+            count: 5,
+          },
         ],
       },
     ]);
@@ -507,7 +511,11 @@ describe("buildHybridZones", () => {
         initials: "m",
         isMe: true,
         zones: [
-          { zoneName: "HandZone", cards: ["Copper", "Copper", "Copper", "Estate", "Estate"], count: 5 },
+          {
+            zoneName: "HandZone",
+            cards: ["Copper", "Copper", "Copper", "Estate", "Estate"],
+            count: 5,
+          },
           { zoneName: "InPlayZone", cards: [], count: 0 },
           { zoneName: "DrawZone", cards: [], count: 5 },
           { zoneName: "DiscardZone", cards: [], count: 0 },
@@ -609,7 +617,11 @@ describe("buildHybridZones", () => {
         initials: "o",
         isMe: false,
         zones: [
-          { zoneName: "HandZone", cards: ["Copper", "Copper", "Copper"], count: 3 },
+          {
+            zoneName: "HandZone",
+            cards: ["Copper", "Copper", "Copper"],
+            count: 3,
+          },
           { zoneName: "InPlayZone", cards: [], count: 0 },
           { zoneName: "DrawZone", cards: [], count: 4 },
           { zoneName: "DiscardZone", cards: [], count: 0 },

@@ -1,59 +1,97 @@
-/* Dominion Helper - Overlay Panel Styles */
+/* Dominion Helper — Side Panel Styles
+ *
+ * Adapted from overlay.css for use in the Chrome side panel. Uses relative
+ * positioning instead of fixed/draggable since the side panel is a native
+ * Chrome UI element. Keeps the same dark theme and color scheme. */
 
-#dominion-helper-panel {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  width: 280px;
-  max-height: 80vh;
-  overflow-y: auto;
-  background: rgba(20, 20, 30, 0.92);
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #14141e;
   color: #e0e0e0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 12px;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  z-index: 99999;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow-y: auto;
 }
+
+.dh-sidepanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────── */
 
 .dh-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: 10px 14px;
   background: rgba(40, 40, 60, 0.95);
-  border-radius: 8px 8px 0 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  cursor: move;
 }
 
 .dh-title {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 14px;
   color: #ffd700;
 }
 
-.dh-toggle {
+/* ─── Main Tabs (Kingdom / Tracker) ──────────────────────────────── */
+
+.dh-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(30, 30, 45, 0.95);
+}
+
+.dh-tab {
+  flex: 1;
+  padding: 8px 12px;
   background: none;
   border: none;
+  border-bottom: 2px solid transparent;
   color: #aaa;
   cursor: pointer;
-  font-size: 16px;
-  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  transition: color 0.15s, border-color 0.15s;
 }
 
-.dh-toggle:hover {
-  color: #fff;
+.dh-tab:hover {
+  color: #ddd;
 }
 
-.dh-body {
-  padding: 8px 12px;
+.dh-tab.active {
+  color: #ffd700;
+  border-bottom-color: #ffd700;
 }
 
-.dh-body.dh-collapsed {
+/* ─── Tab Content ────────────────────────────────────────────────── */
+
+.dh-tab-content {
+  padding: 10px 14px;
+  flex: 1;
+}
+
+.dh-hidden {
   display: none;
 }
+
+.dh-empty-state {
+  color: #666;
+  padding: 20px 0;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ─── Section (shared between kingdom and tracker) ───────────────── */
 
 .dh-section {
   margin-bottom: 10px;
@@ -69,7 +107,7 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-/* Collapsible section titles — clickable to toggle content */
+/* Collapsible section titles */
 .dh-section-title.dh-collapsible {
   cursor: pointer;
   user-select: none;
@@ -97,6 +135,10 @@
   display: none;
 }
 
+/* ─── Kingdom Analysis Sections ──────────────────────────────────── */
+
+.dh-kingdom .dh-section-title { color: #e0e0e0; }
+.dh-unknown .dh-section-title { color: #ff8a65; }
 .dh-components .dh-section-title { color: #64b5f6; }
 .dh-synergies .dh-section-title { color: #81c784; }
 .dh-archetypes .dh-section-title { color: #ffb74d; }
@@ -123,24 +165,7 @@
   margin-bottom: 2px;
 }
 
-/* ─── Deck Tracker Panel ─────────────────────────────────────────────── */
-
-#dominion-helper-tracker {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  width: 260px;
-  max-height: 80vh;
-  overflow-y: auto;
-  background: rgba(20, 20, 30, 0.92);
-  color: #e0e0e0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 12px;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  z-index: 99999;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
+/* ─── Deck Tracker Sections ──────────────────────────────────────── */
 
 /* Player tab bar for switching between You and Opponent */
 .dh-tracker-tabs {
@@ -198,20 +223,4 @@
   padding-top: 2px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   margin-top: 4px;
-}
-
-/* Count-only zone display — used for deck/discard when we know the count
-   from Angular but not the exact card composition */
-.dh-tracker-zone-count {
-  color: #aaa;
-  font-size: 11px;
-  font-style: italic;
-}
-
-/* Bridge status indicator — shows whether Angular bridge is active */
-.dh-tracker-bridge-status {
-  font-size: 10px;
-  color: #666;
-  text-align: right;
-  padding: 2px 0;
 }

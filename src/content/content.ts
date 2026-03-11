@@ -3,13 +3,14 @@
 // This is the main entry point injected into dominion.games by the Chrome
 // extension. It wires three systems:
 //
-// 1. Kingdom analysis: DOM observer detects kingdom cards → analysis engine
-//    produces strategic advice → rendered in the right-side overlay panel.
+// 1. Kingdom analysis: DOM observer detects kingdom cards -> sends card names
+//    to the service worker, which runs the analysis engine and forwards the
+//    result to the side panel.
 //
-// 2. Deck tracker: Game log observer detects card actions → log parser
-//    produces structured entries → deck state tracks card zones → stats
-//    calculator produces composition/probabilities → rendered in the
-//    left-side tracker panel.
+// 2. Deck tracker: Game log observer detects card actions -> log parser
+//    produces structured entries -> deck state tracks card zones -> stats
+//    calculator produces composition/probabilities -> serialized and sent
+//    to the service worker for forwarding to the side panel.
 //
 // 3. Angular bridge: A MAIN-world script polls Angular game state and
 //    dispatches CustomEvents. This content script (ISOLATED world) listens
@@ -20,9 +21,8 @@
 //
 // @module content
 
-import type { Card, GameStateSnapshot } from "../types";
+import type { Card, GameStateSnapshot, TrackerData } from "../types";
 import { observeKingdom } from "./observer";
-import { renderOverlay } from "./ui";
 import { observeGameLog } from "./log-observer";
 import {
   parseLogLine,
@@ -36,7 +36,8 @@ import {
   resetGameState,
   applySnapshot,
 } from "../tracker/deck-state";
-import { renderTrackerPanel } from "../tracker/tracker-ui";
+import { calculateStats } from "../tracker/stats";
+import { serializeTrackerStats } from "./serialize";
 import cardData from "../data/cards.json";
 
 // Build a card database map for O(1) lookups by name.
@@ -64,21 +65,19 @@ function arraysEqual(a: string[], b: string[]): boolean {
 
 // Callback invoked by the DOM observer when a kingdom is detected.
 // Skips processing if the kingdom hasn't changed since the last detection.
-// Otherwise, updates the stored kingdom, notifies the service worker,
-// and renders the analysis overlay.
+// Otherwise, updates the stored kingdom and notifies the service worker
+// which will run the analysis engine and forward results to the side panel.
 //
 // @param cardNames - Array of card name strings detected from the DOM
 function onKingdomDetected(cardNames: string[]): void {
   if (arraysEqual(cardNames, currentKingdom)) return;
   currentKingdom = cardNames;
 
-  // Notify the service worker so the popup can display the current kingdom
+  // Notify the service worker — it runs the analysis and forwards to side panel
   chrome.runtime.sendMessage({
     type: "KINGDOM_DETECTED",
     cards: cardNames,
   });
-
-  renderOverlay(cardNames);
 }
 
 // Start observing the DOM for kingdom cards as soon as the content script loads
@@ -93,11 +92,90 @@ let gameState = createGameState();
 // zone data and log parsing only needs to track ownership changes.
 let bridgeActive = false;
 
+// Currently selected player for the tracker (persists across re-renders).
+// Defaults to the local player when first detected.
+let selectedPlayer = "";
+
+// Finds the local player's abbreviation by checking PLAYER-INFO-NAME
+// elements on the page. The local player's name element is positioned
+// at the bottom of the viewport (y > 50% screen height).
+//
+// @param state - Current game state with player name mappings
+// @returns Abbreviation of the local player, or empty string if not found
+function detectLocalPlayer(): string {
+  const nameEls = document.querySelectorAll("PLAYER-INFO-NAME");
+  for (const el of nameEls) {
+    const rect = el.getBoundingClientRect();
+    // Local player's info bar is at the bottom of the screen
+    if (rect.y > window.innerHeight * 0.5) {
+      const name = el.textContent?.trim() || "";
+      // Find matching abbreviation from the state's player names
+      for (const [abbrev, fullName] of gameState.playerNames) {
+        if (fullName === name) return abbrev;
+      }
+    }
+  }
+  return "";
+}
+
+// Counts total cards in a zone map.
+//
+// @param zone - Map of card name to count
+// @returns Total number of cards
+function zoneTotal(zone: Map<string, number>): number {
+  let total = 0;
+  for (const count of zone.values()) {
+    total += count;
+  }
+  return total;
+}
+
+// Builds serializable TrackerData from the current game state and sends
+// it to the service worker for forwarding to the side panel.
+function sendTrackerUpdate(): void {
+  // Detect local player if not yet set
+  if (!gameState.localPlayer) {
+    gameState.localPlayer = detectLocalPlayer();
+  }
+
+  // Auto-select the local player, or fall back to first player
+  if (!selectedPlayer || !gameState.players.has(selectedPlayer)) {
+    selectedPlayer =
+      gameState.localPlayer || (gameState.players.keys().next().value ?? "");
+  }
+
+  const zones = gameState.players.get(selectedPlayer);
+  if (!zones) return;
+
+  const stats = calculateStats(zones, CARD_DB);
+
+  // Build serializable player list
+  const players = [...gameState.players.keys()].map((abbrev) => ({
+    abbrev,
+    fullName: gameState.playerNames.get(abbrev) || abbrev,
+  }));
+
+  const trackerData: TrackerData = {
+    players,
+    localPlayer: gameState.localPlayer,
+    selectedPlayer,
+    stats: serializeTrackerStats(stats),
+    handCount: zoneTotal(zones.hand),
+    playCount: zoneTotal(zones.play),
+  };
+
+  chrome.runtime.sendMessage({
+    type: "TRACKER_UPDATE",
+    tracker: trackerData,
+  });
+}
+
 // Callback invoked by the log observer when new log lines appear.
-// Parses each line, processes card movements, and re-renders the tracker.
-// When the bridge is active, all log actions are still processed to maintain
-// ownership tracking (gains, trashes, starts-with), which is needed for
-// inferring draw pile composition.
+// Parses each line, processes card movements, and sends the tracker
+// update to the service worker.
+// When the bridge is active, all log actions are still processed to
+// maintain ownership tracking (gains, trashes, starts-with), which is
+// needed for inferring draw pile composition.
 //
 // @param lines - Array of new log line strings from the game log DOM
 function onLogUpdate(lines: string[]): void {
@@ -109,6 +187,7 @@ function onLogUpdate(lines: string[]): void {
     if (isGameStart(line) && gameState.currentTurn > 0) {
       gameState = resetGameState();
       bridgeActive = false;
+      selectedPlayer = "";
       changed = true;
     }
 
@@ -128,10 +207,10 @@ function onLogUpdate(lines: string[]): void {
     }
   }
 
-  // Only re-render if something actually changed and bridge isn't handling renders
-  // When bridge is active, it handles rendering on every snapshot update
+  // Only send update if something actually changed and bridge isn't handling updates
+  // When bridge is active, it handles updates on every snapshot
   if (changed && !bridgeActive) {
-    renderTrackerPanel(gameState, CARD_DB);
+    sendTrackerUpdate();
   }
 }
 
@@ -152,6 +231,20 @@ window.addEventListener("dominion-helper-game-state", (e: Event) => {
   // Apply Angular's ground truth data to our game state
   applySnapshot(gameState, snapshot);
 
-  // Re-render with the corrected state
-  renderTrackerPanel(gameState, CARD_DB);
+  // Send updated tracker data to the side panel
+  sendTrackerUpdate();
 });
+
+// ─── Side Panel Player Selection ────────────────────────────────────────
+
+// Listen for player selection changes from the side panel (forwarded
+// by the service worker). When the user clicks a player tab in the
+// side panel, this switches the selected player and sends an update.
+chrome.runtime.onMessage.addListener(
+  (message: { type: string; player?: string }) => {
+    if (message.type === "SELECT_PLAYER" && message.player) {
+      selectedPlayer = message.player;
+      sendTrackerUpdate();
+    }
+  },
+);
