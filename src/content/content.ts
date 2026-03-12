@@ -261,6 +261,14 @@ observeGameLog(onLogUpdate);
 window.addEventListener("dominion-helper-game-state", (e: Event) => {
   const snapshot = (e as CustomEvent).detail as GameStateSnapshot;
 
+  // Detect new game: turn counter dropped back to start while we were
+  // tracking an ongoing game. Reset state so old player tabs don't persist.
+  if (snapshot.turnNumber <= 1 && gameState.currentTurn > 1) {
+    gameState = resetGameState();
+    latestSnapshot = null;
+    selectedPlayer = "";
+  }
+
   // Mark bridge as active on first snapshot — enables hybrid rendering
   bridgeActive = true;
 
