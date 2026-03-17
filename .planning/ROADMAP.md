@@ -29,11 +29,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A smoke test passes that verifies the extension's service worker is active and the side panel page renders content
   4. Tests run serially (workers: 1) and support `--headed` flag for visual debugging
   5. The extension is built automatically before the test suite runs
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md — Install Playwright, create config, global setup, and fixtures
+- [ ] 01-02-PLAN.md — Write smoke test and verify end-to-end pipeline
 
 ### Phase 2: Authentication & Game Setup
 **Goal**: Tests can log into dominion.games, create a table with Lord Rattington, start a game, and detect when it is the human player's turn
@@ -84,7 +84,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Test Harness | 0/0 | Not started | - |
+| 1. Test Harness | 0/2 | Planning complete | - |
 | 2. Authentication & Game Setup | 0/0 | Not started | - |
 | 3. Kingdom Verification | 0/0 | Not started | - |
 | 4. Tracker Verification | 0/0 | Not started | - |
