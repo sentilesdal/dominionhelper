@@ -14,7 +14,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **HARNESS-03**: Test fixture provides game page handle (dominion.games tab)
 - [ ] **HARNESS-04**: Test fixture provides side panel page handle (navigated to `chrome-extension://<id>/sidepanel.html`)
 - [ ] **HARNESS-05**: Extension builds automatically before E2E test suite runs (`npm run build`)
-- [ ] **HARNESS-06**: Smoke test proves extension loads, service worker starts, and side panel renders
+- [x] **HARNESS-06**: Smoke test proves extension loads, service worker starts, and side panel renders
 
 ### Authentication & Game Setup
 
@@ -41,10 +41,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Developer Experience
 
-- [ ] **DX-01**: E2E tests run via `npm run test:e2e` (separate from `npm test` unit tests)
-- [ ] **DX-02**: Tests run serially (`workers: 1`) since one account can only be in one game
+- [x] **DX-01**: E2E tests run via `npm run test:e2e` (separate from `npm test` unit tests)
+- [x] **DX-02**: Tests run serially (`workers: 1`) since one account can only be in one game
 - [ ] **DX-03**: Failed tests capture screenshot and game log text for debugging
-- [ ] **DX-04**: Tests support headed mode via `--headed` flag for visual debugging
+- [x] **DX-04**: Tests support headed mode via `--headed` flag for visual debugging
 
 ## v2 Requirements
 
@@ -84,7 +84,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | HARNESS-03 | Phase 1 | Pending |
 | HARNESS-04 | Phase 1 | Pending |
 | HARNESS-05 | Phase 1 | Pending |
-| HARNESS-06 | Phase 1 | Pending |
+| HARNESS-06 | Phase 1 | Complete |
 | GAME-01 | Phase 2 | Pending |
 | GAME-02 | Phase 2 | Pending |
 | GAME-03 | Phase 2 | Pending |
@@ -99,10 +99,10 @@ Deferred to future release. Tracked but not in current roadmap.
 | TRACKER-05 | Phase 4 | Pending |
 | TRACKER-06 | Phase 4 | Pending |
 | TRACKER-07 | Phase 4 | Pending |
-| DX-01 | Phase 1 | Pending |
-| DX-02 | Phase 1 | Pending |
+| DX-01 | Phase 1 | Complete |
+| DX-02 | Phase 1 | Complete |
 | DX-03 | Phase 4 | Pending |
-| DX-04 | Phase 1 | Pending |
+| DX-04 | Phase 1 | Complete |
 
 **Coverage:**
 - v1 requirements: 24 total

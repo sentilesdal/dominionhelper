@@ -12,7 +12,7 @@ Build a Playwright-based E2E test suite that loads the Dominion Helper Chrome ex
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Test Harness** - Playwright config, extension loading, fixtures, and smoke test proving the extension runs in an automated browser
+- [x] **Phase 1: Test Harness** - Playwright config, extension loading, fixtures, and smoke test proving the extension runs in an automated browser (completed 2026-03-17)
 - [ ] **Phase 2: Authentication & Game Setup** - Login automation, table creation with bot, game start detection, and turn detection
 - [ ] **Phase 3: Kingdom Verification** - Side panel displays kingdom analysis with 10 cards, components, synergies, and archetypes
 - [ ] **Phase 4: Tracker Verification** - Zone count accuracy, card movement tracking, structural invariant assertions, and failure diagnostics
@@ -84,7 +84,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Test Harness | 0/2 | Planning complete | - |
+| 1. Test Harness | 2/2 | Complete   | 2026-03-17 |
 | 2. Authentication & Game Setup | 0/0 | Not started | - |
 | 3. Kingdom Verification | 0/0 | Not started | - |
 | 4. Tracker Verification | 0/0 | Not started | - |
