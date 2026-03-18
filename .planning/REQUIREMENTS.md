@@ -18,7 +18,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Authentication & Game Setup
 
-- [ ] **GAME-01**: Tests log into dominion.games using credentials from `.env` file (`DOMINION_USER`, `DOMINION_PASS`)
+- [x] **GAME-01**: Tests log into dominion.games using credentials from `.env` file (`DOMINION_USER`, `DOMINION_PASS`)
 - [ ] **GAME-02**: Tests create a table with a bot opponent (Lord Rattington)
 - [ ] **GAME-03**: Tests start a game and wait for the kingdom viewer to appear (10 kingdom cards visible)
 - [ ] **GAME-04**: Tests can detect when the bot's turn is complete and the human player's turn begins
@@ -85,7 +85,7 @@ Deferred to future release. Tracked but not in current roadmap.
 | HARNESS-04 | Phase 1 | Pending |
 | HARNESS-05 | Phase 1 | Pending |
 | HARNESS-06 | Phase 1 | Complete |
-| GAME-01 | Phase 2 | Pending |
+| GAME-01 | Phase 2 | Complete |
 | GAME-02 | Phase 2 | Pending |
 | GAME-03 | Phase 2 | Pending |
 | GAME-04 | Phase 2 | Pending |
