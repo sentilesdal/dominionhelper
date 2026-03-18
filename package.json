@@ -7,6 +7,7 @@
     "dev": "node scripts/build.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npx playwright test",
     "lint": "eslint src/ tests/",
     "lint:fix": "eslint src/ tests/ --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.config.*\" \"*.json\" \".prettierrc\"",
@@ -15,8 +16,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.58.2",
     "@types/chrome": "^0.1.37",
     "@types/jsdom": "^28.0.0",
+    "dotenv": "^17.3.1",
     "eslint": "^10.0.2",
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^28.1.0",

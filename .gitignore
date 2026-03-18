@@ -4,3 +4,7 @@ dist/
 *.log
 *.tsbuildinfo
 .claude/worktrees/
+test-results/
+playwright-report/
+
+.env
