@@ -47,7 +47,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Credential management, authenticatedPage fixture, Playwright config updates
-- [ ] 02-02-PLAN.md — Game interaction helpers and auth/game-setup E2E tests
+- [x] 02-02-PLAN.md — Game interaction helpers and auth/game-setup E2E tests
 
 ### Phase 3: Kingdom Verification
 **Goal**: The side panel displays correct kingdom analysis data after a game starts, proving the content script to service worker to side panel messaging pipeline works end-to-end
@@ -86,7 +86,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Test Harness | 2/2 | Complete   | 2026-03-17 |
-| 2. Authentication & Game Setup | 1/2 | In Progress | - |
+| 2. Authentication & Game Setup | 2/2 | Complete | 2026-03-18 |
 | 3. Kingdom Verification | 0/0 | Not started | - |
 | 4. Tracker Verification | 0/0 | Not started | - |
 
