@@ -32,8 +32,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Install Playwright, create config, global setup, and fixtures
-- [ ] 01-02-PLAN.md — Write smoke test and verify end-to-end pipeline
+- [x] 01-01-PLAN.md — Install Playwright, create config, global setup, and fixtures
+- [x] 01-02-PLAN.md — Write smoke test and verify end-to-end pipeline
 
 ### Phase 2: Authentication & Game Setup
 **Goal**: Tests can log into dominion.games, create a table with Lord Rattington, start a game, and detect when it is the human player's turn
@@ -43,10 +43,11 @@ Plans:
   1. A test logs into dominion.games using credentials from a `.env` file and reaches the lobby
   2. A test creates a table with a bot opponent and starts a game that shows 10 kingdom cards in the kingdom viewer
   3. A test detects when the bot's turn ends and the human player's turn begins
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md — Credential management, authenticatedPage fixture, Playwright config updates
+- [ ] 02-02-PLAN.md — Game interaction helpers and auth/game-setup E2E tests
 
 ### Phase 3: Kingdom Verification
 **Goal**: The side panel displays correct kingdom analysis data after a game starts, proving the content script to service worker to side panel messaging pipeline works end-to-end
@@ -85,7 +86,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Test Harness | 2/2 | Complete   | 2026-03-17 |
-| 2. Authentication & Game Setup | 0/0 | Not started | - |
+| 2. Authentication & Game Setup | 0/2 | In progress | - |
 | 3. Kingdom Verification | 0/0 | Not started | - |
 | 4. Tracker Verification | 0/0 | Not started | - |
 
