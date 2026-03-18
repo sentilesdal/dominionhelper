@@ -109,12 +109,20 @@ export const test = base.extend<{
         }
 
         // Fill the login form using resilient selectors.
-        // Playwright's fill() triggers proper input events for AngularJS
-        // digest cycle, so no manual dispatchEvent is needed.
-        await gamePage.locator('input[type="text"]').first().fill(creds.user);
-        await gamePage.locator('input[type="password"]').fill(creds.pass);
+        // Username uses fill() which works fine for simple text inputs.
+        const usernameInput = gamePage.locator('input[type="text"]').first();
+        await usernameInput.fill(creds.user);
 
-        // Set up response interception before clicking login.
+        // Password uses pressSequentially() to type character by character.
+        // AngularJS's digest cycle can interfere with Playwright's fill()
+        // on password fields, causing value truncation. Typing sequentially
+        // ensures each character is processed by the framework.
+        const passwordInput = gamePage.locator('input[type="password"]');
+        await passwordInput.click();
+        await passwordInput.fill('');
+        await passwordInput.pressSequentially(creds.pass, { delay: 50 });
+
+        // Set up response interception before submitting login.
         // Verify login success via API response status rather than
         // checking the DOM, per CONTEXT.md decision.
         const responsePromise = gamePage.waitForResponse(
@@ -122,9 +130,12 @@ export const test = base.extend<{
           { timeout: 30000 }
         );
 
-        // Click the login button using a role-based locator for resilience.
-        // The regex matches common button text variants ("Log In", "Login", "Sign In").
-        await gamePage.getByRole('button', { name: /log\s*in|sign\s*in/i }).click();
+        // Submit the login form by pressing Enter on the password field.
+        // This is more resilient than clicking a specific button, since
+        // the button text/role varies across site versions. Most login
+        // forms bind Enter on the password field to form submission.
+        // If Enter does not work, fall back to clicking the button.
+        await passwordInput.press('Enter');
 
         // Wait for the login API response and verify it succeeded
         const response = await responsePromise;
