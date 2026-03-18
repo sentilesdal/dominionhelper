@@ -5,6 +5,7 @@
 // - globalSetup: builds the extension before tests run
 // - workers: 1 (serial execution -- single dominion.games account)
 // - channel: 'chromium' (bundled Chromium, not system Chrome)
+// - projects: separate configs for smoke vs auth tests (auth gets retry)
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
@@ -15,4 +16,20 @@ export default defineConfig({
   use: {
     channel: 'chromium',
   },
+
+  // Project-based configuration allows different retry policies.
+  // Auth tests get 1 retry to handle network flakiness when
+  // communicating with dominion.games (per CONTEXT.md decision).
+  // Smoke tests have no retries -- they should always pass reliably.
+  projects: [
+    {
+      name: 'smoke',
+      testMatch: 'smoke.spec.ts',
+    },
+    {
+      name: 'auth',
+      testMatch: 'auth.spec.ts',
+      retries: 1,
+    },
+  ],
 });

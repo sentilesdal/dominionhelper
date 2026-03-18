@@ -1,10 +1,11 @@
 // Custom Playwright fixtures for Chrome extension E2E testing.
 //
-// Provides four fixtures:
+// Provides five fixtures:
 // - context: Persistent browser context with the built extension loaded
 // - extensionId: Dynamic extension ID extracted from the service worker URL
 // - gamePage: A page navigated to https://dominion.games
 // - sidePanelPage: A page navigated to chrome-extension://<id>/sidepanel.html
+// - authenticatedPage: A gamePage that has completed the login flow
 //
 // The context fixture reads the `headless` option from Playwright's use config
 // so the --headed CLI flag works correctly.
@@ -12,6 +13,7 @@
 // Source pattern: https://playwright.dev/docs/chrome-extensions
 import { test as base, chromium, type BrowserContext, type Page } from '@playwright/test';
 import path from 'path';
+import { validateCredentials } from './env-setup';
 
 // Extension fixtures for Dominion Helper E2E tests.
 // Overrides the default context to use a persistent browser context
@@ -21,6 +23,7 @@ export const test = base.extend<{
   extensionId: string;
   gamePage: Page;
   sidePanelPage: Page;
+  authenticatedPage: Page;
 }>({
   // Launch Chrome with the built extension from dist/.
   // Uses an empty string for userDataDir to create a fresh temporary
@@ -68,6 +71,87 @@ export const test = base.extend<{
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/sidepanel.html`);
     await use(page);
+  },
+
+  // A gamePage that has completed the dominion.games login flow.
+  //
+  // Skips the test if credentials are not configured in .env.
+  // Waits for AngularJS to bootstrap, checks if already logged in,
+  // fills the login form, and verifies login via API response.
+  // Retries once on failure; captures a screenshot on final failure.
+  authenticatedPage: async ({ gamePage }, use) => {
+    const creds = validateCredentials();
+    if (!creds) {
+      test.skip(true, 'DOMINION_USER and DOMINION_PASS required in .env');
+      return;
+    }
+
+    // Retry login up to 2 attempts to handle transient network failures
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        // Wait for AngularJS to bootstrap before interacting with the page.
+        // dominion.games is an AngularJS 1.x app; window.angular is
+        // available once the framework has initialized.
+        await gamePage.waitForFunction(() => !!(window as any).angular, {
+          timeout: 15000,
+        });
+
+        // Check if already logged in (handle cached session edge case).
+        // If the lobby page is visible, login was already completed
+        // in a previous session or via cached cookies.
+        const isLoggedIn = await gamePage.evaluate(
+          () => !!document.querySelector('.lobby-page')
+        );
+        if (isLoggedIn) {
+          lastError = null;
+          break;
+        }
+
+        // Fill the login form using resilient selectors.
+        // Playwright's fill() triggers proper input events for AngularJS
+        // digest cycle, so no manual dispatchEvent is needed.
+        await gamePage.locator('input[type="text"]').first().fill(creds.user);
+        await gamePage.locator('input[type="password"]').fill(creds.pass);
+
+        // Set up response interception before clicking login.
+        // Verify login success via API response status rather than
+        // checking the DOM, per CONTEXT.md decision.
+        const responsePromise = gamePage.waitForResponse(
+          (resp) => resp.url().includes('login') || resp.url().includes('auth'),
+          { timeout: 30000 }
+        );
+
+        // Click the login button using a role-based locator for resilience.
+        // The regex matches common button text variants ("Log In", "Login", "Sign In").
+        await gamePage.getByRole('button', { name: /log\s*in|sign\s*in/i }).click();
+
+        // Wait for the login API response and verify it succeeded
+        const response = await responsePromise;
+        if (response.status() !== 200) {
+          throw new Error(`Login API returned status ${response.status()}`);
+        }
+
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err as Error;
+        // On first failure, reload the page and retry
+        if (attempt === 0) {
+          await gamePage.reload();
+        }
+      }
+    }
+
+    // If both attempts failed, capture a screenshot for debugging
+    // and throw with the last error message
+    if (lastError) {
+      await gamePage.screenshot({ path: 'test-results/login-failure.png' });
+      throw new Error(`Login failed after retry: ${lastError.message}`);
+    }
+
+    // The authenticated page IS the gamePage after successful login
+    await use(gamePage);
   },
 });
 

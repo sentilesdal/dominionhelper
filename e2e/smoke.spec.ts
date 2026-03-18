@@ -7,9 +7,23 @@
 // These tests prove the entire pipeline (build -> extension load ->
 // service worker registration -> side panel rendering) works end to end.
 // They do NOT test message passing or game interaction (Phase 2+).
+//
+// All E2E tests require credentials per CONTEXT.md decision.
+// Tests skip gracefully when DOMINION_USER/DOMINION_PASS are missing.
 import { test, expect } from './fixtures';
+import { validateCredentials } from './env-setup';
 
 test.describe('Extension smoke test', () => {
+  // Skip all smoke tests when credentials are not configured.
+  // Per Phase 2 CONTEXT.md: "All E2E tests require credentials
+  // (including smoke tests from Phase 1)"
+  test.beforeEach(() => {
+    const creds = validateCredentials();
+    if (!creds) {
+      test.skip(true, 'DOMINION_USER and DOMINION_PASS required in .env');
+    }
+  });
+
   test('service worker is active', async ({ context }) => {
     // Wait for at least one service worker to register if none exist yet.
     // The service worker may not have registered by the time this test runs
@@ -33,7 +47,7 @@ test.describe('Extension smoke test', () => {
     // Verify the top-level side panel container is visible
     await expect(sidePanelPage.locator('.dh-sidepanel')).toBeVisible();
 
-    // Verify the title text
+    // Verify the title tg ext
     await expect(sidePanelPage.locator('.dh-title')).toHaveText('Dominion Helper');
 
     // Verify both tabs exist (Kingdom and Tracker)
