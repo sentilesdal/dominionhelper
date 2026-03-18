@@ -6,6 +6,7 @@
 // retry and screenshot-on-failure. These tests consume it to verify
 // the complete game setup flow against live dominion.games.
 import { test, expect } from './fixtures';
+import { capturePageState } from './helpers/debug';
 import {
   createTableWithBot,
   getKingdomCardCount,
@@ -23,10 +24,8 @@ test.describe('Authentication', () => {
     expect(authenticatedPage.url()).toContain('dominion.games');
 
     // Wait for lobby content to appear, proving login succeeded.
-    // The lobby contains either .lobby-page or tab-button navigation
-    // elements, depending on the current lobby state.
     await expect(
-      authenticatedPage.locator('.lobby-page, .tab-button')
+      authenticatedPage.locator('.lobby-page')
     ).toBeVisible({ timeout: 10000 });
   });
 });
@@ -43,9 +42,12 @@ test.describe('Game setup flow', () => {
     // game start + kingdom rendering + turn detection.
     test.setTimeout(120000);
 
+    // Capture lobby state for debugging selectors.
+    // Produces screenshot, DOM snapshot, and element list in test-results/.
+    await capturePageState(authenticatedPage, 'lobby-state');
+
     // GAME-02: Create a table with Lord Rattington as the bot opponent.
-    // This navigates the lobby to create a new table, add the bot,
-    // and start the game.
+    // This navigates the lobby to click "1 Bot" and start the game.
     await createTableWithBot(authenticatedPage);
 
     // GAME-03: Wait for the kingdom viewer to appear and verify

@@ -7,40 +7,41 @@
 // All waiting uses Playwright's built-in retry mechanisms (expect.poll,
 // locator auto-waiting) rather than manual setTimeout/setInterval.
 import { type Page, expect } from '@playwright/test';
+import { capturePageState } from './debug';
 
-// Navigates the dominion.games lobby to create a new table with
-// Lord Rattington as the bot opponent and starts the game.
+// Navigates the dominion.games lobby to start a bot game using the
+// "1 Bot" quick-start button in the Bot Game section.
 //
-// Steps: click "New Table" tab -> click "Create Table" -> add Lord
-// Rattington bot -> click "Start Game" / "Ready" button.
+// The lobby has a "Bot Game" section with "1 Bot" / "2 Bots" / "3 Bots"
+// buttons that skip the table creation flow entirely. This was discovered
+// via page state captures -- the previous "New Table -> Create Table ->
+// Lord Rattington -> Start" flow was wrong.
 //
-// Selectors are based on LogDog/command.games research. Text-based
-// locators are preferred for resilience against class name changes.
+// Captures page state before and after for self-debugging: if this
+// function fails, the artifacts in test-results/ show what buttons
+// and elements were actually on the page.
 //
 // @param page - Playwright Page already logged into dominion.games
 export async function createTableWithBot(page: Page): Promise<void> {
-  // Step 1: Click the "New Table" tab in the lobby navigation.
-  // Uses text filter for resilience -- the tab text is "New Table"
-  // across English locales.
-  await page.locator('.tab-button').filter({ hasText: /new table/i }).click();
+  // Capture lobby state before clicking anything.
+  // If the "1 Bot" button doesn't exist, the screenshot and
+  // elements list will show what's actually on the page.
+  await capturePageState(page, 'before-bot-game');
 
-  // Step 2: Click the "Create Table" button.
-  // This appears after selecting the New Table tab and opens the
-  // table configuration view.
-  await page.locator('.lobby-button').filter({ hasText: /create/i }).click();
+  // Click the "1 Bot" quick-start button in the Bot Game section.
+  // exact: true prevents matching "1 Bot" inside longer strings.
+  await page.getByText('1 Bot', { exact: true }).click();
 
-  // Step 3: Add Lord Rattington as the bot opponent.
-  // The first visible .lobby-button.kingdom-selection element is the
-  // Lord Rattington button. Wait for it to become visible before clicking,
-  // as the table setup view may take a moment to render.
-  const botButton = page.locator('.lobby-button.kingdom-selection').first();
-  await botButton.waitFor({ state: 'visible' });
-  await botButton.click();
+  // Wait for the game to load. The kingdom viewer or game log
+  // appearing means the game has started and cards are dealt.
+  // 30s timeout accounts for server-side game creation delay.
+  await page
+    .locator('.kingdom-viewer-group, .game-log')
+    .first()
+    .waitFor({ state: 'visible', timeout: 30000 });
 
-  // Step 4: Start the game by clicking the start/ready button.
-  // The button text varies ("Start Game", "Ready", etc.) so we use
-  // a broad regex match.
-  await page.locator('.lobby-button').filter({ hasText: /start|ready/i }).click();
+  // Capture game state after the game starts for debugging.
+  await capturePageState(page, 'after-bot-game-start');
 }
 
 // Counts the number of kingdom cards visible in the kingdom viewer.
