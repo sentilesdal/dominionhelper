@@ -530,6 +530,63 @@ describe("buildHybridZones", () => {
     expect(zones.deck.get("Estate")).toBe(1);
   });
 
+  it("places a played card in play while removing it from hand", () => {
+    const state = createGameState();
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+    processLogEntry(state, makeEntry("m", "starts-with", ["Estate"], [3]));
+    state.playerNames.set("m", "muddybrown");
+
+    const beforePlay = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          {
+            zoneName: "HandZone",
+            cards: ["Copper", "Copper", "Copper", "Estate", "Estate"],
+            count: 5,
+          },
+          { zoneName: "InPlayZone", cards: [], count: 0 },
+          { zoneName: "DrawZone", cards: [], count: 5 },
+          { zoneName: "DiscardZone", cards: [], count: 0 },
+          { zoneName: "TrashZone", cards: [], count: 0 },
+        ],
+      },
+    ]);
+
+    const beforeZones = buildHybridZones(state, beforePlay).get("m")!;
+
+    expect(beforeZones.hand.get("Copper")).toBe(3);
+    expect(beforeZones.hand.get("Estate")).toBe(2);
+    expect(beforeZones.play.size).toBe(0);
+
+    const afterPlay = makeSnapshot([
+      {
+        name: "muddybrown",
+        initials: "m",
+        isMe: true,
+        zones: [
+          {
+            zoneName: "HandZone",
+            cards: ["Copper", "Copper", "Estate", "Estate"],
+            count: 4,
+          },
+          { zoneName: "InPlayZone", cards: ["Copper"], count: 1 },
+          { zoneName: "DrawZone", cards: [], count: 5 },
+          { zoneName: "DiscardZone", cards: [], count: 0 },
+          { zoneName: "TrashZone", cards: [], count: 0 },
+        ],
+      },
+    ]);
+
+    const afterZones = buildHybridZones(state, afterPlay).get("m")!;
+
+    expect(afterZones.hand.get("Copper")).toBe(2);
+    expect(afterZones.hand.get("Estate")).toBe(2);
+    expect(afterZones.play.get("Copper")).toBe(1);
+  });
+
   it("puts all pool cards in deck when discard is empty", () => {
     const state = createGameState();
     processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
