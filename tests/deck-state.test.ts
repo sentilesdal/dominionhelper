@@ -431,6 +431,28 @@ describe("applySnapshotMetadata", () => {
     expect(state.players.has("n")).toBe(true);
     expect(state.players.get("n")!.deck.size).toBe(0);
   });
+
+  it("does not create a duplicate tracker player for Lord Rattington", () => {
+    const state = createGameState();
+    processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
+    processLogEntry(state, makeEntry("l", "starts-with", ["Copper"], [7]));
+
+    const snapshot = makeSnapshot([
+      { name: "muddybrown", initials: "m", isMe: true, zones: [] },
+      {
+        name: "Lord Rattington",
+        initials: "L.",
+        isMe: false,
+        zones: [],
+      },
+    ]);
+
+    applySnapshotMetadata(state, snapshot);
+
+    expect([...state.players.keys()]).toEqual(["m", "l"]);
+    expect(state.playerNames.get("l")).toBe("Lord Rattington");
+    expect(state.playerNames.has("l.")).toBe(false);
+  });
 });
 
 describe("inferDrawPile", () => {
