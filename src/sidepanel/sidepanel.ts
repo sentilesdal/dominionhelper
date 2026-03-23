@@ -8,6 +8,7 @@
 // Message types handled:
 // - ANALYSIS_UPDATE: AnalysisResult from the analysis engine
 // - TRACKER_UPDATE: TrackerData with serialized deck stats
+// - TRACKER_CLEAR: clears stale tracker UI when no live game is active
 //
 // @module sidepanel
 
@@ -238,6 +239,20 @@ function renderCardList(cards: Record<string, number>): string {
     .join("");
 }
 
+// Restores the tracker's empty state. Used when the content script reports that
+// there is no active game, so the side panel does not keep showing stale tabs
+// and card zones from the previous match.
+//
+// @param message - Empty-state message to show in the tracker tab
+export function renderTrackerEmptyState(
+  message: string = "Waiting for a game on dominion.games...",
+): void {
+  const container = document.getElementById("tracker-tab");
+  if (!container) return;
+
+  container.innerHTML = `<div class="dh-empty-state">${escapeHtml(message)}</div>`;
+}
+
 // Renders the deck tracker into the tracker tab pane. Called when a
 // TRACKER_UPDATE message is received. Layout order (most to least important):
 // 1. Player tabs, 2. Draw pile, 3. Village/terminal ratio,
@@ -415,6 +430,7 @@ export function renderTracker(data: TrackerData): void {
 // Listens for messages from the service worker and updates the UI.
 // ANALYSIS_UPDATE replaces the kingdom tab content.
 // TRACKER_UPDATE replaces the tracker tab content.
+// TRACKER_CLEAR restores the empty tracker state.
 chrome.runtime.onMessage.addListener(
   (message: {
     type: string;
@@ -427,6 +443,10 @@ chrome.runtime.onMessage.addListener(
 
     if (message.type === "TRACKER_UPDATE" && message.tracker) {
       renderTracker(message.tracker);
+    }
+
+    if (message.type === "TRACKER_CLEAR") {
+      renderTrackerEmptyState();
     }
   },
 );

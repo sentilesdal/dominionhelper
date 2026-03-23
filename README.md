@@ -27,16 +27,19 @@ npm run build
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `npm run build` | Typecheck + build extension to `dist/` |
-| `npm run dev` | Build without typecheck (faster) |
-| `npm test` | Run tests once |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run lint` | Check for lint errors |
-| `npm run lint:fix` | Auto-fix lint errors |
-| `npm run format` | Format all files with Prettier |
-| `npm run typecheck` | Run TypeScript type checker |
+| Command                | Description                                               |
+| ---------------------- | --------------------------------------------------------- |
+| `npm run build`        | Typecheck + build extension to `dist/`                    |
+| `npm run dev`          | Build without typecheck (faster)                          |
+| `npm test`             | Run tests once                                            |
+| `npm run test:tracker` | Run tracker-focused unit tests                            |
+| `npm run test:watch`   | Run tests in watch mode                                   |
+| `npm run test:smoke`   | Run the stable extension smoke suite in Playwright        |
+| `npm run test:auth`    | Run authenticated dominion.games tracker Playwright tests |
+| `npm run lint`         | Check for lint errors                                     |
+| `npm run lint:fix`     | Auto-fix lint errors                                      |
+| `npm run format`       | Format all files with Prettier                            |
+| `npm run typecheck`    | Run TypeScript type checker                               |
 
 ### Loading the Extension
 
@@ -47,6 +50,27 @@ npm run build
 5. Navigate to [dominion.games](https://dominion.games) and start a game
 
 After code changes, run `npm run build` again and click the reload button on the extension card in `chrome://extensions/`.
+
+### Tracker Development Workflow
+
+Tracker work has a dedicated verification loop in [docs/workflows/tracker-development.md](docs/workflows/tracker-development.md).
+
+For tracker changes, use this minimum loop:
+
+```bash
+npm run test:tracker
+npm run build
+npm run test:smoke
+```
+
+Then verify the live page in Chrome with the debug handle exposed on dominion.games:
+
+```js
+const dh = window.__dominionHelperDebug;
+dh.bridgeSnapshot;
+dh.trackerState?.tracker;
+dh.trackerState?.gameState;
+```
 
 ## Architecture
 

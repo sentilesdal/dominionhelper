@@ -39,6 +39,11 @@ import {
 } from "../tracker/deck-state";
 import { calculateStats } from "../tracker/stats";
 import { serializeTrackerStats, mapToRecord } from "./serialize";
+import {
+  getTrackerPlayers,
+  resolveSelectedPlayer,
+  serializeDebugGameState,
+} from "./tracker-runtime";
 import cardData from "../data/cards.json";
 
 // Build a card database map for O(1) lookups by name.
@@ -135,6 +140,34 @@ function zoneTotal(zone: Map<string, number>): number {
   return total;
 }
 
+// Sends the current tracker internals to the MAIN-world bridge so the state is
+// visible from the page's DevTools console. This makes it much easier to
+// compare raw Angular state against the extension's derived tracker state.
+//
+// @param tracker - The current tracker payload, or null when clearing state
+function dispatchTrackerDebug(tracker: TrackerData | null): void {
+  window.dispatchEvent(
+    new CustomEvent("dominion-helper-tracker-debug", {
+      detail: {
+        tracker,
+        gameState: serializeDebugGameState(gameState),
+        bridgeActive,
+        latestSnapshotTurn: latestSnapshot?.turnNumber ?? null,
+        selectedPlayer,
+      },
+    }),
+  );
+}
+
+// Clears any cached tracker UI in the side panel and updates the page-visible
+// debug handle so stale state does not linger after leaving a game.
+function sendTrackerClear(): void {
+  chrome.runtime.sendMessage({
+    type: "TRACKER_CLEAR",
+  });
+  dispatchTrackerDebug(null);
+}
+
 // Builds serializable TrackerData from the current game state and sends
 // it to the service worker for forwarding to the side panel.
 function sendTrackerUpdate(): void {
@@ -143,10 +176,16 @@ function sendTrackerUpdate(): void {
     gameState.localPlayer = detectLocalPlayer();
   }
 
-  // Auto-select the local player, or fall back to first player
-  if (!selectedPlayer || !gameState.players.has(selectedPlayer)) {
-    selectedPlayer =
-      gameState.localPlayer || (gameState.players.keys().next().value ?? "");
+  const players = getTrackerPlayers(gameState, latestSnapshot, bridgeActive);
+  selectedPlayer = resolveSelectedPlayer(
+    selectedPlayer,
+    gameState.localPlayer,
+    players,
+  );
+
+  if (players.length === 0 || !selectedPlayer) {
+    sendTrackerClear();
+    return;
   }
 
   // When the Angular bridge is active, use buildHybridZones() to produce
@@ -157,18 +196,25 @@ function sendTrackerUpdate(): void {
   if (bridgeActive && latestSnapshot) {
     const hybridMap = buildHybridZones(gameState, latestSnapshot);
     zones = hybridMap.get(selectedPlayer);
+
+    // The bridge snapshot is the source of truth for current players, so if the
+    // previously selected player disappeared we fall back to the first player
+    // that still has hybrid zones available.
+    if (!zones) {
+      const fallbackPlayer = players.find((player) =>
+        hybridMap.has(player.abbrev),
+      );
+      if (fallbackPlayer) {
+        selectedPlayer = fallbackPlayer.abbrev;
+        zones = hybridMap.get(selectedPlayer);
+      }
+    }
   } else {
     zones = gameState.players.get(selectedPlayer);
   }
   if (!zones) return;
 
   const stats = calculateStats(zones, CARD_DB);
-
-  // Build serializable player list
-  const players = [...gameState.players.keys()].map((abbrev) => ({
-    abbrev,
-    fullName: gameState.playerNames.get(abbrev) || abbrev,
-  }));
 
   // Count villages and terminals across the player's full deck
   let villageCount = 0;
@@ -201,6 +247,8 @@ function sendTrackerUpdate(): void {
     type: "TRACKER_UPDATE",
     tracker: trackerData,
   });
+
+  dispatchTrackerDebug(trackerData);
 }
 
 // Callback invoked by the log observer when new log lines appear.
@@ -259,7 +307,21 @@ observeGameLog(onLogUpdate);
 // sendTrackerUpdate() uses buildHybridZones() to merge Angular ground truth
 // with log-based ownership tracking for accurate zone data.
 window.addEventListener("dominion-helper-game-state", (e: Event) => {
-  const snapshot = (e as CustomEvent).detail as GameStateSnapshot;
+  const snapshot = (e as CustomEvent).detail as GameStateSnapshot | null;
+
+  // The MAIN-world bridge dispatches a null detail when the player leaves a
+  // game or Angular no longer exposes player state. Clear the tracker so old
+  // tabs and card zones do not persist in the side panel.
+  if (!snapshot) {
+    if (bridgeActive || latestSnapshot || gameState.players.size > 0) {
+      gameState = resetGameState();
+      bridgeActive = false;
+      latestSnapshot = null;
+      selectedPlayer = "";
+      sendTrackerClear();
+    }
+    return;
+  }
 
   // Detect new game: turn counter dropped back to start while we were
   // tracking an ongoing game. Reset state so old player tabs don't persist.
