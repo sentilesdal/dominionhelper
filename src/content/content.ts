@@ -39,6 +39,7 @@ import {
 } from "../tracker/deck-state";
 import { calculateStats } from "../tracker/stats";
 import { serializeTrackerStats, mapToRecord } from "./serialize";
+import { getTrackerPlayers, resolveSelectedPlayer } from "./tracker-runtime";
 import cardData from "../data/cards.json";
 
 // Build a card database map for O(1) lookups by name.
@@ -143,11 +144,13 @@ function sendTrackerUpdate(): void {
     gameState.localPlayer = detectLocalPlayer();
   }
 
-  // Auto-select the local player, or fall back to first player
-  if (!selectedPlayer || !gameState.players.has(selectedPlayer)) {
-    selectedPlayer =
-      gameState.localPlayer || (gameState.players.keys().next().value ?? "");
-  }
+  const players = getTrackerPlayers(gameState, latestSnapshot, bridgeActive);
+  selectedPlayer = resolveSelectedPlayer(
+    selectedPlayer,
+    gameState.localPlayer,
+    players,
+  );
+  if (players.length === 0 || !selectedPlayer) return;
 
   // When the Angular bridge is active, use buildHybridZones() to produce
   // accurate zone data. This combines Angular ground truth (hand, play, trash)
@@ -157,18 +160,25 @@ function sendTrackerUpdate(): void {
   if (bridgeActive && latestSnapshot) {
     const hybridMap = buildHybridZones(gameState, latestSnapshot);
     zones = hybridMap.get(selectedPlayer);
+
+    // The bridge snapshot is the source of truth for current players, so if the
+    // selected player no longer has hybrid zones we fall back to the first live
+    // player that still does.
+    if (!zones) {
+      const fallbackPlayer = players.find((player) =>
+        hybridMap.has(player.abbrev),
+      );
+      if (fallbackPlayer) {
+        selectedPlayer = fallbackPlayer.abbrev;
+        zones = hybridMap.get(selectedPlayer);
+      }
+    }
   } else {
     zones = gameState.players.get(selectedPlayer);
   }
   if (!zones) return;
 
   const stats = calculateStats(zones, CARD_DB);
-
-  // Build serializable player list
-  const players = [...gameState.players.keys()].map((abbrev) => ({
-    abbrev,
-    fullName: gameState.playerNames.get(abbrev) || abbrev,
-  }));
 
   // Count villages and terminals across the player's full deck
   let villageCount = 0;
