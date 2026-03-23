@@ -12,6 +12,7 @@
 // Message types handled:
 // - KINGDOM_DETECTED: content script found kingdom cards -> run analysis -> forward to side panel
 // - TRACKER_UPDATE: content script sends serialized deck stats -> forward to side panel
+// - TRACKER_CLEAR: content script cleared tracker state because no live game is active
 // - SELECT_PLAYER: side panel requests player switch -> forward to content script tab
 // - GET_ANALYSIS: side panel requests current analysis (on open)
 // - GET_TRACKER: side panel requests current tracker data (on open)
@@ -92,6 +93,26 @@ chrome.runtime.onMessage.addListener(
         .sendMessage({
           type: "TRACKER_UPDATE",
           tracker: message.tracker,
+        })
+        .catch(() => {
+          // Side panel may not be open
+        });
+
+      sendResponse({ ok: true });
+    }
+
+    // Content script cleared tracker state — forget the cached value and tell
+    // the side panel to return to its waiting state.
+    if (message.type === "TRACKER_CLEAR") {
+      if (sender.tab?.id) {
+        contentTabId = sender.tab.id;
+      }
+
+      currentTracker = null;
+
+      chrome.runtime
+        .sendMessage({
+          type: "TRACKER_CLEAR",
         })
         .catch(() => {
           // Side panel may not be open

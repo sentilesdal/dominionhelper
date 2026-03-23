@@ -2,12 +2,19 @@
 //
 // Pure helper functions for the content script's tracker pipeline. These keep
 // player tab selection deterministic when the Angular bridge's live player
-// snapshot diverges from the log-discovered game state.
+// snapshot diverges from the log-discovered game state, and they expose a
+// debug-friendly serialized view of tracker internals.
 //
 // @module tracker-runtime
 
-import type { GameState, GameStateSnapshot, TrackerPlayer } from "../types";
+import type {
+  GameState,
+  GameStateSnapshot,
+  PlayerZones,
+  TrackerPlayer,
+} from "../types";
 import { normalizePlayerAbbrev } from "../tracker/player-abbrev";
+import { mapToRecord } from "./serialize";
 
 // Finds the abbreviation already mapped to a full player name.
 //
@@ -22,6 +29,22 @@ function findMappedAbbrev(state: GameState, fullName: string): string | null {
   }
 
   return null;
+}
+
+// Serializes a single player's tracked zones into plain objects.
+//
+// @param zones - Map-based zone state for a player
+// @returns JSON-serializable zone records
+function serializePlayerZones(
+  zones: PlayerZones,
+): Record<keyof PlayerZones, Record<string, number>> {
+  return {
+    deck: mapToRecord(zones.deck),
+    discard: mapToRecord(zones.discard),
+    hand: mapToRecord(zones.hand),
+    play: mapToRecord(zones.play),
+    trash: mapToRecord(zones.trash),
+  };
 }
 
 // Builds the canonical player list for the tracker UI.
@@ -90,4 +113,35 @@ export function resolveSelectedPlayer(
   }
 
   return players[0]?.abbrev ?? "";
+}
+
+// Converts the content script's Map-based game state into plain objects so the
+// current tracker state can be inspected from Chrome DevTools.
+//
+// @param state - Current tracker game state
+// @returns JSON-serializable tracker state for debugging
+export function serializeDebugGameState(state: GameState): {
+  currentTurn: number;
+  activePlayer: string;
+  localPlayer: string;
+  playerNames: Record<string, string>;
+  players: Record<string, ReturnType<typeof serializePlayerZones>>;
+} {
+  const playerNames: Record<string, string> = {};
+  for (const [abbrev, fullName] of state.playerNames) {
+    playerNames[abbrev] = fullName;
+  }
+
+  const players: Record<string, ReturnType<typeof serializePlayerZones>> = {};
+  for (const [abbrev, zones] of state.players) {
+    players[abbrev] = serializePlayerZones(zones);
+  }
+
+  return {
+    currentTurn: state.currentTurn,
+    activePlayer: state.activePlayer,
+    localPlayer: state.localPlayer,
+    playerNames,
+    players,
+  };
 }

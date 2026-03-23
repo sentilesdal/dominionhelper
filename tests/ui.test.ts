@@ -28,6 +28,7 @@ import {
   renderSection,
   renderOpenings,
   renderTracker,
+  renderTrackerEmptyState,
 } from "../src/sidepanel/sidepanel";
 import type { AnalysisResult, TrackerData } from "../src/types";
 
@@ -432,5 +433,23 @@ describe("renderTracker", () => {
       type: "SELECT_PLAYER",
       player: "o",
     });
+  });
+});
+
+describe("renderTrackerEmptyState", () => {
+  it("shows the default tracker waiting message", () => {
+    renderTrackerEmptyState();
+
+    const container = document.getElementById("tracker-tab")!;
+    expect(container.textContent).toContain(
+      "Waiting for a game on dominion.games...",
+    );
+  });
+
+  it("shows a custom tracker empty-state message", () => {
+    renderTrackerEmptyState("Tracker cleared.");
+
+    const container = document.getElementById("tracker-tab")!;
+    expect(container.textContent).toContain("Tracker cleared.");
   });
 });

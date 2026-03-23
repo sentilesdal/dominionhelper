@@ -4,6 +4,7 @@ import { createGameState, createPlayerZones } from "../src/tracker/deck-state";
 import {
   getTrackerPlayers,
   resolveSelectedPlayer,
+  serializeDebugGameState,
 } from "../src/content/tracker-runtime";
 
 // Builds a minimal Angular snapshot for tracker runtime tests.
@@ -53,7 +54,6 @@ describe("getTrackerPlayers", () => {
       { abbrev: "l", fullName: "Lord Rattington" },
     ]);
   });
-
   it("falls back to log-discovered players when the bridge is inactive", () => {
     const state = createGameState();
     state.playerNames.set("m", "muddybrown");
@@ -64,6 +64,19 @@ describe("getTrackerPlayers", () => {
     expect(getTrackerPlayers(state, null, false)).toEqual([
       { abbrev: "m", fullName: "muddybrown" },
       { abbrev: "o", fullName: "opponent" },
+    ]);
+  });
+
+  it("deduplicates duplicate bridge players by abbreviation", () => {
+    const state = createGameState();
+
+    const snapshot = makeSnapshot([
+      { name: "muddybrown", initials: "m", isMe: true, zones: [] },
+      { name: "muddybrown", initials: "m", isMe: true, zones: [] },
+    ]);
+
+    expect(getTrackerPlayers(state, snapshot, true)).toEqual([
+      { abbrev: "m", fullName: "muddybrown" },
     ]);
   });
 });
@@ -88,5 +101,38 @@ describe("resolveSelectedPlayer", () => {
 
   it("returns an empty string when no players are available", () => {
     expect(resolveSelectedPlayer("m", "m", [])).toBe("");
+  });
+});
+
+describe("serializeDebugGameState", () => {
+  it("converts the internal tracker state into plain objects", () => {
+    const state = createGameState();
+    state.currentTurn = 4;
+    state.activePlayer = "m";
+    state.localPlayer = "m";
+    state.playerNames.set("m", "muddybrown");
+
+    const zones = createPlayerZones();
+    zones.deck.set("Copper", 4);
+    zones.hand.set("Estate", 1);
+    state.players.set("m", zones);
+
+    expect(serializeDebugGameState(state)).toEqual({
+      currentTurn: 4,
+      activePlayer: "m",
+      localPlayer: "m",
+      playerNames: {
+        m: "muddybrown",
+      },
+      players: {
+        m: {
+          deck: { Copper: 4 },
+          discard: {},
+          hand: { Estate: 1 },
+          play: {},
+          trash: {},
+        },
+      },
+    });
   });
 });
