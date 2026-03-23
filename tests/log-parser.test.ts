@@ -157,6 +157,13 @@ describe("parseLogLine", () => {
     expect(result!.counts).toEqual([7]);
   });
 
+  it("normalizes dotted bot abbreviations", () => {
+    const result = parseLogLine("L. starts with 7 Coppers.");
+    expect(result).not.toBeNull();
+    expect(result!.playerAbbrev).toBe("l");
+    expect(result!.action).toBe("starts-with");
+  });
+
   it("returns null for empty string", () => {
     expect(parseLogLine("")).toBeNull();
   });
@@ -194,6 +201,10 @@ describe("parseTurnMarker", () => {
 describe("isGameStart", () => {
   it("returns true for 'starts with' lines", () => {
     expect(isGameStart("m starts with 7 Coppers.")).toBe(true);
+  });
+
+  it("returns true for dotted bot 'starts with' lines", () => {
+    expect(isGameStart("L. starts with 7 Coppers.")).toBe(true);
   });
 
   it("returns false for other lines", () => {

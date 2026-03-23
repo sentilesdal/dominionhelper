@@ -28,6 +28,7 @@ import type {
   PlayerSnapshot,
   PlayerZones,
 } from "../types";
+import { normalizePlayerAbbrev } from "./player-abbrev";
 
 // Creates a fresh set of empty zones for a new player.
 //
@@ -396,8 +397,10 @@ function findAbbrevForPlayer(player: PlayerSnapshot, state: GameState): string {
     if (name === player.name) return abbrev;
   }
 
-  // Angular's initials field matches the log abbreviation in most cases
-  const initials = player.initials.toLowerCase();
+  // The bridge may include punctuation in initials (for example "L."),
+  // while the log parser uses a stripped token. Normalize both sources
+  // to keep one tracker identity per player.
+  const initials = normalizePlayerAbbrev(player.initials);
 
   // Register the mapping and ensure zones exist
   state.playerNames.set(initials, player.name);
