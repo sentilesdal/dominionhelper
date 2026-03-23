@@ -10,6 +10,7 @@
 // @module log-parser
 
 import type { LogAction, LogEntry } from "../types";
+import { normalizePlayerAbbrev } from "./player-abbrev";
 
 // Card names that are already plural and should NOT be singularized.
 // These are cards whose names end in 's' naturally (Gardens, not Garden).
@@ -46,26 +47,26 @@ const PLURAL_EXCEPTIONS = new Set([
 // abbreviation; the second (if present) is the card list text.
 const ACTION_PATTERNS: [RegExp, LogAction][] = [
   // "buys and gains" must come before "gains" to avoid partial match
-  [/^(\w+) buys and gains (.+)\.$/, "buys"],
-  [/^(\w+) plays (.+)\.$/, "plays"],
-  [/^(\w+) gains (.+)\.$/, "gains"],
-  [/^(\w+) trashes (.+)\.$/, "trashes"],
-  [/^(\w+) draws (.+)\.$/, "draws"],
-  [/^(\w+) discards (.+)\.$/, "discards"],
-  [/^(\w+) puts (.+) on their deck\.$/, "topdecks"],
-  [/^(\w+) starts with (.+)\.$/, "starts-with"],
-  [/^(\w+) shuffles their deck\.$/, "shuffles"],
-  [/^(\w+) reveals (.+)\.$/, "reveals"],
-  [/^(\w+) sets aside (.+)\.$/, "sets-aside"],
-  [/^(\w+) returns (.+)\.$/, "returns"],
-  [/^(\w+) passes (.+)\.$/, "passes"],
+  [/^([^\s]+) buys and gains (.+)\.$/, "buys"],
+  [/^([^\s]+) plays (.+)\.$/, "plays"],
+  [/^([^\s]+) gains (.+)\.$/, "gains"],
+  [/^([^\s]+) trashes (.+)\.$/, "trashes"],
+  [/^([^\s]+) draws (.+)\.$/, "draws"],
+  [/^([^\s]+) discards (.+)\.$/, "discards"],
+  [/^([^\s]+) puts (.+) on their deck\.$/, "topdecks"],
+  [/^([^\s]+) starts with (.+)\.$/, "starts-with"],
+  [/^([^\s]+) shuffles their deck\.$/, "shuffles"],
+  [/^([^\s]+) reveals (.+)\.$/, "reveals"],
+  [/^([^\s]+) sets aside (.+)\.$/, "sets-aside"],
+  [/^([^\s]+) returns (.+)\.$/, "returns"],
+  [/^([^\s]+) passes (.+)\.$/, "passes"],
 ];
 
 // Regex for turn marker lines: "Turn 1 - muddybrown"
 const TURN_MARKER_RE = /^Turn (\d+) - (.+)$/;
 
 // Regex for "starts with" lines, used to detect new game starts
-const STARTS_WITH_RE = /^(\w+) starts with /;
+const STARTS_WITH_RE = /^[^\s]+ starts with /;
 
 // Converts a potentially plural card name to its singular form.
 // Dominion's log uses plural names (e.g., "3 Coppers") but the card
@@ -193,7 +194,7 @@ export function parseLogLine(text: string): LogEntry | null {
     const match = trimmed.match(pattern);
     if (!match) continue;
 
-    const playerAbbrev = match[1];
+    const playerAbbrev = normalizePlayerAbbrev(match[1]);
 
     // Shuffle has no card list
     if (action === "shuffles") {

@@ -1,37 +1,20 @@
 // Dominion Helper — Tracker Runtime Helpers
 //
-// Pure helper functions for the content script's tracker pipeline.
-// These utilities keep player selection, player tab rendering, and
-// debug serialization deterministic and easy to unit test.
+// Pure helper functions for the content script's tracker pipeline. These keep
+// player tab selection deterministic when the Angular bridge's live player
+// snapshot diverges from the log-discovered game state, and they expose a
+// debug-friendly serialized view of tracker internals.
 //
 // @module tracker-runtime
 
 import type {
   GameState,
   GameStateSnapshot,
-  TrackerPlayer,
   PlayerZones,
+  TrackerPlayer,
 } from "../types";
+import { normalizePlayerAbbrev } from "../tracker/player-abbrev";
 import { mapToRecord } from "./serialize";
-
-// Serializable version of a player's tracked zones, used by the page-visible
-// debug surface to inspect the extension's current internal state.
-export interface SerializedPlayerZones {
-  deck: Record<string, number>;
-  discard: Record<string, number>;
-  hand: Record<string, number>;
-  play: Record<string, number>;
-  trash: Record<string, number>;
-}
-
-// Serializable snapshot of the content script's internal tracker state.
-export interface SerializedDebugGameState {
-  currentTurn: number;
-  activePlayer: string;
-  localPlayer: string;
-  playerNames: Record<string, string>;
-  players: Record<string, SerializedPlayerZones>;
-}
 
 // Finds the abbreviation already mapped to a full player name.
 //
@@ -52,7 +35,9 @@ function findMappedAbbrev(state: GameState, fullName: string): string | null {
 //
 // @param zones - Map-based zone state for a player
 // @returns JSON-serializable zone records
-function serializePlayerZones(zones: PlayerZones): SerializedPlayerZones {
+function serializePlayerZones(
+  zones: PlayerZones,
+): Record<keyof PlayerZones, Record<string, number>> {
   return {
     deck: mapToRecord(zones.deck),
     discard: mapToRecord(zones.discard),
@@ -65,8 +50,8 @@ function serializePlayerZones(zones: PlayerZones): SerializedPlayerZones {
 // Builds the canonical player list for the tracker UI.
 //
 // When the Angular bridge is active, we trust the snapshot's player list so
-// tabs only reflect players in the live game. Without the bridge, we fall back
-// to players discovered from log parsing.
+// the tracker only renders players in the live game. Without the bridge, we
+// fall back to players discovered from log parsing.
 //
 // @param state - Current tracker game state
 // @param snapshot - Most recent Angular snapshot, if available
@@ -83,7 +68,8 @@ export function getTrackerPlayers(
 
     for (const player of snapshot.players) {
       const abbrev =
-        findMappedAbbrev(state, player.name) ?? player.initials.toLowerCase();
+        findMappedAbbrev(state, player.name) ??
+        normalizePlayerAbbrev(player.initials);
       if (seen.has(abbrev)) continue;
 
       seen.add(abbrev);
@@ -134,15 +120,19 @@ export function resolveSelectedPlayer(
 //
 // @param state - Current tracker game state
 // @returns JSON-serializable tracker state for debugging
-export function serializeDebugGameState(
-  state: GameState,
-): SerializedDebugGameState {
+export function serializeDebugGameState(state: GameState): {
+  currentTurn: number;
+  activePlayer: string;
+  localPlayer: string;
+  playerNames: Record<string, string>;
+  players: Record<string, ReturnType<typeof serializePlayerZones>>;
+} {
   const playerNames: Record<string, string> = {};
   for (const [abbrev, fullName] of state.playerNames) {
     playerNames[abbrev] = fullName;
   }
 
-  const players: Record<string, SerializedPlayerZones> = {};
+  const players: Record<string, ReturnType<typeof serializePlayerZones>> = {};
   for (const [abbrev, zones] of state.players) {
     players[abbrev] = serializePlayerZones(zones);
   }

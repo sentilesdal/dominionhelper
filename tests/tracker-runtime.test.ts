@@ -7,7 +7,7 @@ import {
   serializeDebugGameState,
 } from "../src/content/tracker-runtime";
 
-// Builds a minimal Angular snapshot for tracker-runtime tests.
+// Builds a minimal Angular snapshot for tracker runtime tests.
 //
 // @param players - Snapshot players to include
 // @param turnNumber - Current turn number in the snapshot
@@ -41,6 +41,19 @@ describe("getTrackerPlayers", () => {
     ]);
   });
 
+  it("normalizes dotted bridge initials for Lord Rattington", () => {
+    const state = createGameState();
+
+    const snapshot = makeSnapshot([
+      { name: "muddybrown", initials: "m", isMe: true, zones: [] },
+      { name: "Lord Rattington", initials: "L.", isMe: false, zones: [] },
+    ]);
+
+    expect(getTrackerPlayers(state, snapshot, true)).toEqual([
+      { abbrev: "m", fullName: "muddybrown" },
+      { abbrev: "l", fullName: "Lord Rattington" },
+    ]);
+  });
   it("falls back to log-discovered players when the bridge is inactive", () => {
     const state = createGameState();
     state.playerNames.set("m", "muddybrown");
