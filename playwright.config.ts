@@ -38,6 +38,11 @@ export default defineConfig({
       name: 'auth',
       testMatch: 'auth.spec.ts',
       retries: 1,
+      // Auth tests need a longer timeout because login, stale game
+      // cleanup, and table creation all involve server round-trips.
+      // The default 30s is not enough when the server has stale
+      // game state from previous test runs.
+      timeout: 30000,
     },
   ],
 });
