@@ -62,6 +62,20 @@ describe("parseCardList", () => {
     expect(result.counts).toEqual([3, 2, 1]);
   });
 
+  it("parses Oxford-comma lists without leaving 'and' in the card name", () => {
+    const result = parseCardList("Copper, Copper, and a Border Guard");
+    expect(result.cards).toEqual(["Copper", "Copper", "Border Guard"]);
+    expect(result.counts).toEqual([1, 1, 1]);
+  });
+
+  it("parses counted Oxford-comma lists", () => {
+    const result = parseCardList(
+      "Copper, 2 Border Guards, and 3 Border Guards",
+    );
+    expect(result.cards).toEqual(["Copper", "Border Guard", "Border Guard"]);
+    expect(result.counts).toEqual([1, 2, 3]);
+  });
+
   it("parses 'a' article as count 1", () => {
     const result = parseCardList("a Silver");
     expect(result.cards).toEqual(["Silver"]);

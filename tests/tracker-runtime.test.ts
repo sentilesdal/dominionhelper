@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest";
 import type { GameStateSnapshot } from "../src/types";
 import { createGameState, createPlayerZones } from "../src/tracker/deck-state";
 import {
+  countTrackedCards,
+  didTurnCounterReset,
+  filterPlayersWithTrackedCards,
   getTrackerPlayers,
+  resolvePreferredSelectedPlayer,
   resolveSelectedPlayer,
   serializeDebugGameState,
 } from "../src/content/tracker-runtime";
@@ -101,6 +105,69 @@ describe("resolveSelectedPlayer", () => {
 
   it("returns an empty string when no players are available", () => {
     expect(resolveSelectedPlayer("m", "m", [])).toBe("");
+  });
+});
+
+describe("resolvePreferredSelectedPlayer", () => {
+  const players = [
+    { abbrev: "l", fullName: "Lord Rattington" },
+    { abbrev: "m", fullName: "muddybrown" },
+  ];
+
+  it("prefers the local player when the current selection is only automatic", () => {
+    expect(resolvePreferredSelectedPlayer("l", "m", players, false)).toBe("m");
+  });
+
+  it("preserves a user-pinned opponent selection", () => {
+    expect(resolvePreferredSelectedPlayer("l", "m", players, true)).toBe("l");
+  });
+});
+
+describe("countTrackedCards", () => {
+  it("counts cards across all tracked zones", () => {
+    const zones = createPlayerZones();
+    zones.deck.set("Copper", 7);
+    zones.hand.set("Estate", 3);
+    zones.play.set("Village", 1);
+
+    expect(countTrackedCards(zones)).toBe(11);
+  });
+
+  it("returns zero for empty zones", () => {
+    expect(countTrackedCards(createPlayerZones())).toBe(0);
+  });
+});
+
+describe("filterPlayersWithTrackedCards", () => {
+  it("removes players whose zones are still empty after a reset", () => {
+    const players = [
+      { abbrev: "m", fullName: "muddybrown" },
+      { abbrev: "l", fullName: "Lord Rattington" },
+    ];
+
+    const zonesByPlayer = new Map<string, ReturnType<typeof createPlayerZones>>();
+    const readyZones = createPlayerZones();
+    readyZones.deck.set("Copper", 10);
+
+    zonesByPlayer.set("m", readyZones);
+    zonesByPlayer.set("l", createPlayerZones());
+
+    expect(filterPlayersWithTrackedCards(players, zonesByPlayer)).toEqual([
+      { abbrev: "m", fullName: "muddybrown" },
+    ]);
+  });
+});
+
+describe("didTurnCounterReset", () => {
+  it("treats a lower next turn as a reset", () => {
+    expect(didTurnCounterReset(1, 0)).toBe(true);
+    expect(didTurnCounterReset(8, 1)).toBe(true);
+  });
+
+  it("does not treat stable or increasing turns as a reset", () => {
+    expect(didTurnCounterReset(0, 0)).toBe(false);
+    expect(didTurnCounterReset(1, 1)).toBe(false);
+    expect(didTurnCounterReset(1, 2)).toBe(false);
   });
 });
 

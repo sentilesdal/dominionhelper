@@ -117,10 +117,17 @@ export function parseCardList(text: string): {
   const cards: string[] = [];
   const counts: number[] = [];
 
-  // Split on ", " and " and " to get individual card entries
+  // Normalize natural-language separators before splitting so Oxford-comma
+  // lists like "Copper, Silver, and a Gold" do not leave behind an
+  // "and a Gold" pseudo-card.
+  const normalized = text
+    .replace(/,\s+and\s+/g, ", ")
+    .replace(/\s+and\s+/g, ", ");
+
+  // Split on comma separators to get individual card entries.
   // e.g., "3 Coppers, 2 Silvers and a Gold" -> ["3 Coppers", "2 Silvers", "a Gold"]
-  const parts = text
-    .split(/,\s+|\s+and\s+/)
+  const parts = normalized
+    .split(/,\s+/)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
 
