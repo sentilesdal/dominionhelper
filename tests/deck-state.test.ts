@@ -637,11 +637,10 @@ describe("buildHybridZones", () => {
     expect(zones.discard.size).toBe(0);
   });
 
-  it("includes trash from Angular", () => {
+  it("uses Angular trash to remove cards from owned hidden zones", () => {
     const state = createGameState();
     processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
     processLogEntry(state, makeEntry("m", "starts-with", ["Estate"], [3]));
-    processLogEntry(state, makeEntry("m", "trashes", ["Estate"], [2]));
     state.playerNames.set("m", "muddybrown");
 
     const snapshot = makeSnapshot([
@@ -652,9 +651,9 @@ describe("buildHybridZones", () => {
         zones: [
           { zoneName: "HandZone", cards: [], count: 0 },
           { zoneName: "InPlayZone", cards: [], count: 0 },
-          { zoneName: "DrawZone", cards: [], count: 8 },
+          { zoneName: "DrawZone", cards: [], count: 9 },
           { zoneName: "DiscardZone", cards: [], count: 0 },
-          { zoneName: "TrashZone", cards: ["Estate", "Estate"], count: 2 },
+          { zoneName: "TrashZone", cards: ["Estate"], count: 1 },
         ],
       },
     ]);
@@ -662,7 +661,8 @@ describe("buildHybridZones", () => {
     const hybrid = buildHybridZones(state, snapshot);
     const zones = hybrid.get("m")!;
 
-    expect(zones.trash.get("Estate")).toBe(2);
+    expect(zones.trash.get("Estate")).toBe(1);
+    expect(zones.deck.get("Estate")).toBe(2);
   });
 
   it("handles multiple players", () => {
@@ -711,10 +711,12 @@ describe("buildHybridZones", () => {
     expect(hybrid.get("o")!.deck.get("Copper")).toBe(4);
   });
 
-  it("splits pool between deck and discard when discard is non-empty", () => {
+  it("keeps hidden deck and discard sourced from the log", () => {
     const state = createGameState();
     processLogEntry(state, makeEntry("m", "starts-with", ["Copper"], [7]));
     processLogEntry(state, makeEntry("m", "starts-with", ["Estate"], [3]));
+    processLogEntry(state, makeEntry("m", "draws", ["Copper"], [5]));
+    processLogEntry(state, makeEntry("m", "discards", ["Copper"], [2]));
     state.playerNames.set("m", "muddybrown");
 
     const snapshot = makeSnapshot([
@@ -723,10 +725,14 @@ describe("buildHybridZones", () => {
         initials: "m",
         isMe: true,
         zones: [
-          { zoneName: "HandZone", cards: ["Copper", "Copper"], count: 2 },
+          {
+            zoneName: "HandZone",
+            cards: ["Copper", "Copper", "Copper"],
+            count: 3,
+          },
           { zoneName: "InPlayZone", cards: [], count: 0 },
-          { zoneName: "DrawZone", cards: [], count: 3 },
-          { zoneName: "DiscardZone", cards: [], count: 5 },
+          { zoneName: "DrawZone", cards: [], count: 1 },
+          { zoneName: "DiscardZone", cards: [], count: 6 },
           { zoneName: "TrashZone", cards: [], count: 0 },
         ],
       },
@@ -735,15 +741,9 @@ describe("buildHybridZones", () => {
     const hybrid = buildHybridZones(state, snapshot);
     const zones = hybrid.get("m")!;
 
-    // Pool = 10 - 2 (hand) = 8 cards total (deck 3 + discard 5)
-    let deckTotal = 0;
-    for (const count of zones.deck.values()) deckTotal += count;
-    let discardTotal = 0;
-    for (const count of zones.discard.values()) discardTotal += count;
-
-    // Zone totals must match Angular counts
-    expect(deckTotal).toBe(3);
-    expect(discardTotal).toBe(5);
+    expect(zones.deck.get("Copper")).toBe(2);
+    expect(zones.deck.get("Estate")).toBe(3);
+    expect(zones.discard.get("Copper")).toBe(2);
   });
 
   it("correctly infers deck even when log parsing is behind Angular", () => {

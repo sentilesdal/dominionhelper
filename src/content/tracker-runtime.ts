@@ -47,6 +47,69 @@ function serializePlayerZones(
   };
 }
 
+// Counts the total number of tracked cards across all of a player's zones.
+//
+// Used to suppress tracker tabs during a fresh-game reset window where the
+// Angular bridge already knows who the players are, but log-based ownership
+// tracking has not rebuilt the new game's deck composition yet.
+//
+// @param zones - Zone state for one player
+// @returns Total tracked cards across deck, discard, hand, play, and trash
+export function countTrackedCards(zones: PlayerZones): number {
+  let total = 0;
+
+  for (const zone of [
+    zones.deck,
+    zones.discard,
+    zones.hand,
+    zones.play,
+    zones.trash,
+  ]) {
+    for (const count of zone.values()) {
+      total += count;
+    }
+  }
+
+  return total;
+}
+
+// Filters the tracker player list down to players whose current zone snapshot
+// contains at least one tracked card.
+//
+// During the short new-game reset window, this prevents the side panel from
+// keeping stale player tabs alive while the tracker only has zero-card shell
+// data for the next game.
+//
+// @param players - Ordered tracker player list for the current game
+// @param zonesByPlayer - Current zone state keyed by player abbreviation
+// @returns Only players whose zones contain tracked cards
+export function filterPlayersWithTrackedCards(
+  players: TrackerPlayer[],
+  zonesByPlayer: Map<string, PlayerZones>,
+): TrackerPlayer[] {
+  return players.filter((player) => {
+    const zones = zonesByPlayer.get(player.abbrev);
+    return Boolean(zones && countTrackedCards(zones) > 0);
+  });
+}
+
+// Detects whether the live turn counter moved backwards, which dominion.games
+// uses when transitioning from one game to the next.
+//
+// A drop from 1 to 0 is just as much a reset as a drop from 8 to 1, so the
+// tracker should clear whenever the next observed turn number is lower than the
+// previous one.
+//
+// @param previousTurn - Previously tracked turn number
+// @param nextTurn - Newly observed turn number from the bridge snapshot
+// @returns True when the snapshot indicates a new game/reset transition
+export function didTurnCounterReset(
+  previousTurn: number,
+  nextTurn: number,
+): boolean {
+  return nextTurn < previousTurn;
+}
+
 // Builds the canonical player list for the tracker UI.
 //
 // When the Angular bridge is active, we trust the snapshot's player list so
@@ -113,6 +176,31 @@ export function resolveSelectedPlayer(
   }
 
   return players[0]?.abbrev ?? "";
+}
+
+// Resolves the selected player while distinguishing between an automatic
+// default selection and a user-pinned tab choice.
+//
+// Automatic selection should always snap back to the local player when that
+// player becomes available. User-pinned selections should be preserved as long
+// as the chosen player still exists.
+//
+// @param currentSelectedPlayer - Previously selected player abbreviation
+// @param localPlayer - Local player abbreviation, if known
+// @param players - Current tracker player list
+// @param keepCurrentSelection - True when the user explicitly chose a tab
+// @returns The player abbreviation that should be selected, or empty string
+export function resolvePreferredSelectedPlayer(
+  currentSelectedPlayer: string,
+  localPlayer: string,
+  players: TrackerPlayer[],
+  keepCurrentSelection: boolean,
+): string {
+  return resolveSelectedPlayer(
+    keepCurrentSelection ? currentSelectedPlayer : "",
+    localPlayer,
+    players,
+  );
 }
 
 // Converts the content script's Map-based game state into plain objects so the

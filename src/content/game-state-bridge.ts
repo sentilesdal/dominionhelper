@@ -13,26 +13,10 @@
 //
 // @module game-state-bridge
 
-// Type aliases for the Angular structures we read. These mirror the runtime
-// shape of the dominion.games Angular objects — not importable since this
-// file runs in MAIN world with no module system access to our types.
-interface BridgeZoneSnapshot {
-  zoneName: string;
-  cards: string[];
-  count: number;
-}
-
-interface BridgePlayerSnapshot {
-  name: string;
-  initials: string;
-  isMe: boolean;
-  zones: BridgeZoneSnapshot[];
-}
-
-interface BridgeGameStateSnapshot {
-  players: BridgePlayerSnapshot[];
-  turnNumber: number;
-}
+import {
+  type BridgeGameStateSnapshot,
+  extractGameStateSnapshot,
+} from "./game-state-bridge-runtime";
 
 interface DominionHelperDebugHandle {
   bridgeSnapshot: BridgeGameStateSnapshot | null;
@@ -74,41 +58,7 @@ function getSnapshot(): BridgeGameStateSnapshot | null {
 
     const game = injector.get("game");
     if (!game?.state?.players) return null;
-
-    const players: BridgePlayerSnapshot[] = [];
-    for (const player of game.state.players) {
-      const zones: BridgeZoneSnapshot[] = [];
-
-      for (const zone of player.ownedZones) {
-        const zoneName: string = zone.zoneName;
-        const cards: string[] = [];
-        let count = 0;
-
-        // Each zone contains cardStacks; visible cards have topCard with pileName,
-        // face-down cards contribute to privateAnonymousCards count
-        for (const stack of zone.cardStacks) {
-          if (stack.topCard?.pileName?.english) {
-            cards.push(stack.topCard.pileName.english);
-            count += 1;
-          }
-          count += stack.privateAnonymousCards || 0;
-        }
-
-        zones.push({ zoneName, cards, count });
-      }
-
-      players.push({
-        name: player.name,
-        initials: player.initials,
-        isMe: player.isMe,
-        zones,
-      });
-    }
-
-    return {
-      players,
-      turnNumber: game.state.turnCounter || 0,
-    };
+    return extractGameStateSnapshot(game);
   } catch {
     // Angular not ready or game not in progress — silently return null
     return null;

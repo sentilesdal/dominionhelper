@@ -344,6 +344,115 @@ export function getAllOwnedCards(zones: PlayerZones): Map<string, number> {
   return owned;
 }
 
+// Computes the total tracked cards across every zone, including trash.
+// This lets the hybrid builder replace log-based trash with Angular trash
+// while preserving the total number of cards the tracker has seen.
+//
+// @param zones - The player's zone state
+// @returns Map of card name to total count across all tracked zones
+function getAllTrackedCards(zones: PlayerZones): Map<string, number> {
+  const tracked = new Map<string, number>();
+
+  const allZones: CardZone[] = ["deck", "discard", "hand", "play", "trash"];
+  for (const zoneName of allZones) {
+    for (const [card, count] of zones[zoneName]) {
+      tracked.set(card, (tracked.get(card) || 0) + count);
+    }
+  }
+
+  return tracked;
+}
+
+// Builds a count map for a visible Angular zone.
+//
+// @param player - Player snapshot from Angular
+// @param zoneName - Angular zone name (for example "HandZone")
+// @returns Count map for the zone's visible cards
+function getAngularVisibleZone(
+  player: PlayerSnapshot,
+  zoneName: string,
+): Map<string, number> {
+  const cards = new Map<string, number>();
+  const zone = player.zones.find((candidate) => candidate.zoneName === zoneName);
+  if (!zone) return cards;
+
+  for (const card of zone.cards) {
+    addToZone(cards, card, 1);
+  }
+
+  return cards;
+}
+
+// Subtracts one card-count map from another, clamping at zero. Used to
+// remove authoritative Angular-visible cards from the tracker-owned pool
+// before rebuilding the hidden zones from log state.
+//
+// @param base - Starting card counts
+// @param removal - Cards to subtract
+// @returns A new Map containing the clamped difference
+function subtractCardMaps(
+  base: Map<string, number>,
+  removal: Map<string, number>,
+): Map<string, number> {
+  const result = new Map<string, number>(base);
+
+  for (const [card, count] of removal) {
+    const current = result.get(card) || 0;
+    const remaining = current - count;
+    if (remaining <= 0) {
+      result.delete(card);
+    } else {
+      result.set(card, remaining);
+    }
+  }
+
+  return result;
+}
+
+// Places hidden cards back into deck/discard using the log's current hidden
+// zones as hints. When the log and Angular disagree, we preserve as much of
+// the log's deck/discard placement as possible and send any unhinted remainder
+// to discard so we do not overstate draw odds.
+//
+// @param hiddenPool - Hidden owned cards after removing visible Angular zones
+// @param logZones - Log-tracked player zones used as placement hints
+// @returns Deck/discard maps rebuilt from log-first hidden state
+function placeHiddenCardsFromLog(
+  hiddenPool: Map<string, number>,
+  logZones: PlayerZones,
+): Pick<PlayerZones, "deck" | "discard"> {
+  const deck = new Map<string, number>();
+  const discard = new Map<string, number>();
+
+  for (const [card, targetCount] of hiddenPool) {
+    let remaining = targetCount;
+    const deckHint = logZones.deck.get(card) || 0;
+    const discardHint = logZones.discard.get(card) || 0;
+
+    const hintedDeck = Math.min(remaining, deckHint);
+    if (hintedDeck > 0) {
+      addToZone(deck, card, hintedDeck);
+      remaining -= hintedDeck;
+    }
+
+    const hintedDiscard = Math.min(remaining, discardHint);
+    if (hintedDiscard > 0) {
+      addToZone(discard, card, hintedDiscard);
+      remaining -= hintedDiscard;
+    }
+
+    if (remaining <= 0) continue;
+
+    if (deckHint > discardHint) {
+      addToZone(deck, card, remaining);
+    } else {
+      addToZone(discard, card, remaining);
+    }
+  }
+
+  return { deck, discard };
+}
+
 // ─── Hybrid Angular Bridge Functions ──────────────────────────────────
 //
 // These functions merge Angular game state snapshots (ground truth for
@@ -407,16 +516,6 @@ function findAbbrevForPlayer(player: PlayerSnapshot, state: GameState): string {
   return initials;
 }
 
-// Gets the count for a specific Angular zone from a player snapshot.
-//
-// @param player - Player snapshot from Angular
-// @param zoneName - Angular zone name (e.g., "DrawZone", "DiscardZone")
-// @returns Card count in that zone, or 0 if zone not found
-function getAngularZoneCount(player: PlayerSnapshot, zoneName: string): number {
-  const zone = player.zones.find((z) => z.zoneName === zoneName);
-  return zone ? zone.count : 0;
-}
-
 // Infers the draw pile composition using ownership tracking and Angular zone data.
 //
 // The key insight: we track all cards a player has ever gained (from logs) and
@@ -473,11 +572,12 @@ export function inferDrawPile(
 }
 
 // Builds hybrid PlayerZones by combining Angular snapshot data with log-based
-// ownership tracking. This produces the most accurate possible zone state:
+// ownership tracking. Visible zones come from Angular, while hidden zones stay
+// log-first:
 // - hand and play: exact cards from Angular (ground truth)
 // - trash: exact cards from Angular (ground truth)
-// - deck + discard pool: inferred from total owned minus hand minus play
-// - deck/discard split: count from Angular, card composition inferred
+// - deck and discard: reconstructed from log ownership after subtracting the
+//   authoritative visible zones
 //
 // @param state - Current game state with log-based ownership data
 // @param snapshot - Angular game state snapshot
@@ -493,71 +593,25 @@ export function buildHybridZones(
     const logZones = state.players.get(abbrev);
     if (!logZones) continue;
 
-    // Get exact cards from Angular for visible zones
     const hybrid = createPlayerZones();
+    const hand = getAngularVisibleZone(player, "HandZone");
+    const play = getAngularVisibleZone(player, "InPlayZone");
+    const trash = getAngularVisibleZone(player, "TrashZone");
 
-    // Hand — exact from Angular
-    const handZone = player.zones.find((z) => z.zoneName === "HandZone");
-    if (handZone) {
-      for (const card of handZone.cards) {
-        addToZone(hybrid.hand, card, 1);
-      }
-    }
+    hybrid.hand = hand;
+    hybrid.play = play;
+    hybrid.trash = trash;
 
-    // Play — exact from Angular
-    const playZone = player.zones.find((z) => z.zoneName === "InPlayZone");
-    if (playZone) {
-      for (const card of playZone.cards) {
-        addToZone(hybrid.play, card, 1);
-      }
-    }
+    // Start from every tracked card, replace log trash with Angular trash,
+    // then remove the authoritative visible owned zones.
+    const allTracked = getAllTrackedCards(logZones);
+    const currentlyOwned = subtractCardMaps(allTracked, hybrid.trash);
+    const afterHand = subtractCardMaps(currentlyOwned, hybrid.hand);
+    const hiddenPool = subtractCardMaps(afterHand, hybrid.play);
+    const hiddenZones = placeHiddenCardsFromLog(hiddenPool, logZones);
 
-    // Trash — exact from Angular
-    const trashZone = player.zones.find((z) => z.zoneName === "TrashZone");
-    if (trashZone) {
-      for (const card of trashZone.cards) {
-        addToZone(hybrid.trash, card, 1);
-      }
-    }
-
-    // Infer deck + discard from ownership tracking
-    const allOwned = getAllOwnedCards(logZones);
-    const deckCount = getAngularZoneCount(player, "DrawZone");
-    const discardCount = getAngularZoneCount(player, "DiscardZone");
-
-    const { deckPool } = inferDrawPile(
-      allOwned,
-      hybrid.hand,
-      hybrid.play,
-      deckCount,
-      discardCount,
-    );
-
-    // Split pool between deck and discard using Angular's counts.
-    // When discard is empty, all pool cards are in the draw pile (exact).
-    // When discard is non-empty, we can't know which specific cards are
-    // where, so we fill deck first up to deckCount and put the rest in
-    // discard. The per-card assignment is approximate but the zone totals
-    // match Angular's ground truth, giving correct draw probabilities.
-    if (discardCount === 0) {
-      for (const [card, count] of deckPool) {
-        addToZone(hybrid.deck, card, count);
-      }
-    } else {
-      let remaining = deckCount;
-      for (const [card, count] of deckPool) {
-        if (remaining >= count) {
-          addToZone(hybrid.deck, card, count);
-          remaining -= count;
-        } else if (remaining > 0) {
-          addToZone(hybrid.deck, card, remaining);
-          addToZone(hybrid.discard, card, count - remaining);
-          remaining = 0;
-        } else {
-          addToZone(hybrid.discard, card, count);
-        }
-      }
-    }
+    hybrid.deck = hiddenZones.deck;
+    hybrid.discard = hiddenZones.discard;
 
     result.set(abbrev, hybrid);
   }

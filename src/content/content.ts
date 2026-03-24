@@ -31,18 +31,25 @@ import {
 } from "../tracker/log-parser";
 import {
   createGameState,
-  processLogEntry,
-  processTurnChange,
   resetGameState,
   applySnapshotMetadata,
   buildHybridZones,
 } from "../tracker/deck-state";
+import {
+  createPendingDrawBuffer,
+  clearPendingDrawBuffer,
+  processObservedLogItems,
+  type ObservedLogItem,
+} from "../tracker/log-stream";
 import { calculateStats } from "../tracker/stats";
 import { serializeTrackerStats, mapToRecord } from "./serialize";
 import {
   getTrackerPlayers,
-  resolveSelectedPlayer,
+  resolvePreferredSelectedPlayer,
   serializeDebugGameState,
+  countTrackedCards,
+  didTurnCounterReset,
+  filterPlayersWithTrackedCards,
 } from "./tracker-runtime";
 import cardData from "../data/cards.json";
 
@@ -102,9 +109,21 @@ let bridgeActive = false;
 // Updated every time the bridge dispatches a state change event.
 let latestSnapshot: GameStateSnapshot | null = null;
 
+// Buffers ambiguous active-player draw lines until later log entries confirm
+// whether they were ordinary draws or cleanup draws for the next hand.
+const pendingDrawBuffer = createPendingDrawBuffer();
+
 // Currently selected player for the tracker (persists across re-renders).
 // Defaults to the local player when first detected.
 let selectedPlayer = "";
+
+// Tracks whether the user explicitly chose a player tab. When false, automatic
+// selection should keep preferring the local player as new tracker data arrives.
+let selectedPlayerPinned = false;
+
+// Tracks whether we intentionally reset for a newly starting game and should
+// keep the tracker empty until fresh ownership data exists for the new match.
+let waitingForFreshTrackerData = false;
 
 // Finds the local player's abbreviation by checking PLAYER-INFO-NAME
 // elements on the page. The local player's name element is positioned
@@ -176,43 +195,54 @@ function sendTrackerUpdate(): void {
     gameState.localPlayer = detectLocalPlayer();
   }
 
-  const players = getTrackerPlayers(gameState, latestSnapshot, bridgeActive);
-  selectedPlayer = resolveSelectedPlayer(
+  let players = getTrackerPlayers(gameState, latestSnapshot, bridgeActive);
+  selectedPlayer = resolvePreferredSelectedPlayer(
     selectedPlayer,
     gameState.localPlayer,
     players,
+    selectedPlayerPinned,
   );
 
-  if (players.length === 0 || !selectedPlayer) {
+  // When the Angular bridge is active, use buildHybridZones() to produce
+  // accurate zone data. Visible zones come from Angular, while hidden zones
+  // stay reconstructed from the log-based tracker state.
+  // Without the bridge, fall back to raw log-parsed zones.
+  let zonesMap = gameState.players;
+  if (bridgeActive && latestSnapshot) {
+    zonesMap = buildHybridZones(gameState, latestSnapshot);
+  }
+
+  if (waitingForFreshTrackerData) {
+    players = filterPlayersWithTrackedCards(players, zonesMap);
+    selectedPlayer = resolvePreferredSelectedPlayer(
+      selectedPlayer,
+      gameState.localPlayer,
+      players,
+      selectedPlayerPinned,
+    );
+
+    if (players.length === 0 || !selectedPlayer) {
+      sendTrackerClear();
+      return;
+    }
+  } else if (players.length === 0 || !selectedPlayer) {
     sendTrackerClear();
     return;
   }
 
-  // When the Angular bridge is active, use buildHybridZones() to produce
-  // accurate zone data. This combines Angular ground truth (hand, play, trash)
-  // with log-based ownership tracking to infer draw pile composition.
-  // Without the bridge, fall back to raw log-parsed zones.
-  let zones;
-  if (bridgeActive && latestSnapshot) {
-    const hybridMap = buildHybridZones(gameState, latestSnapshot);
-    zones = hybridMap.get(selectedPlayer);
-
-    // The bridge snapshot is the source of truth for current players, so if the
-    // previously selected player disappeared we fall back to the first player
-    // that still has hybrid zones available.
-    if (!zones) {
-      const fallbackPlayer = players.find((player) =>
-        hybridMap.has(player.abbrev),
-      );
-      if (fallbackPlayer) {
-        selectedPlayer = fallbackPlayer.abbrev;
-        zones = hybridMap.get(selectedPlayer);
-      }
-    }
-  } else {
-    zones = gameState.players.get(selectedPlayer);
+  const zones = zonesMap.get(selectedPlayer);
+  if (!zones) {
+    sendTrackerClear();
+    return;
   }
-  if (!zones) return;
+
+  if (waitingForFreshTrackerData) {
+    waitingForFreshTrackerData = countTrackedCards(zones) === 0;
+    if (waitingForFreshTrackerData) {
+      sendTrackerClear();
+      return;
+    }
+  }
 
   const stats = calculateStats(zones, CARD_DB);
 
@@ -261,37 +291,60 @@ function sendTrackerUpdate(): void {
 // @param lines - Array of new log line strings from the game log DOM
 function onLogUpdate(lines: string[]): void {
   let changed = false;
+  let needsImmediateSync = false;
+  const items: ObservedLogItem[] = [];
 
   for (const line of lines) {
     // Detect new game start — reset state if we see "starts with"
     // after the game has already begun (turn > 0)
     if (isGameStart(line) && gameState.currentTurn > 0) {
       gameState = resetGameState();
+      clearPendingDrawBuffer(pendingDrawBuffer);
       bridgeActive = false;
       latestSnapshot = null;
       selectedPlayer = "";
+      selectedPlayerPinned = false;
+      waitingForFreshTrackerData = true;
+      sendTrackerClear();
       changed = true;
     }
 
     // Check for turn markers ("Turn 1 - muddybrown")
     const turn = parseTurnMarker(line);
     if (turn) {
-      processTurnChange(gameState, turn.turn, turn.fullName, CARD_DB);
-      changed = true;
+      items.push({
+        kind: "turn",
+        turn: turn.turn,
+        fullName: turn.fullName,
+      });
       continue;
     }
 
     // Parse and process regular log entries (plays, buys, draws, etc.)
     const entry = parseLogLine(line);
     if (entry) {
-      processLogEntry(gameState, entry);
-      changed = true;
+      items.push({
+        kind: "entry",
+        entry,
+      });
     }
   }
 
-  // Only send update if something actually changed and bridge isn't handling updates
-  // When bridge is active, it handles updates on every snapshot
-  if (changed && !bridgeActive) {
+  if (items.length > 0) {
+    const result = processObservedLogItems(
+      gameState,
+      items,
+      CARD_DB,
+      pendingDrawBuffer,
+    );
+    changed = changed || result.changed;
+    needsImmediateSync = result.needsImmediateSync;
+  }
+
+  // Hidden-zone log changes still need immediate tracker updates even while
+  // the Angular bridge is active, because discard/deck changes are not always
+  // visible enough in the bridge snapshot to trigger a timely refresh.
+  if (changed && (!bridgeActive || needsImmediateSync)) {
     sendTrackerUpdate();
   }
 }
@@ -304,8 +357,8 @@ observeGameLog(onLogUpdate);
 // Listen for game state snapshots from the MAIN-world bridge script.
 // The bridge polls Angular every 500ms and dispatches a CustomEvent only
 // when the state changes. We store the snapshot and update metadata, then
-// sendTrackerUpdate() uses buildHybridZones() to merge Angular ground truth
-// with log-based ownership tracking for accurate zone data.
+// sendTrackerUpdate() uses buildHybridZones() to overlay Angular-visible
+// zones on top of the log-reconstructed hidden zones.
 window.addEventListener("dominion-helper-game-state", (e: Event) => {
   const snapshot = (e as CustomEvent).detail as GameStateSnapshot | null;
 
@@ -315,9 +368,12 @@ window.addEventListener("dominion-helper-game-state", (e: Event) => {
   if (!snapshot) {
     if (bridgeActive || latestSnapshot || gameState.players.size > 0) {
       gameState = resetGameState();
+      clearPendingDrawBuffer(pendingDrawBuffer);
       bridgeActive = false;
       latestSnapshot = null;
       selectedPlayer = "";
+      selectedPlayerPinned = false;
+      waitingForFreshTrackerData = false;
       sendTrackerClear();
     }
     return;
@@ -325,10 +381,14 @@ window.addEventListener("dominion-helper-game-state", (e: Event) => {
 
   // Detect new game: turn counter dropped back to start while we were
   // tracking an ongoing game. Reset state so old player tabs don't persist.
-  if (snapshot.turnNumber <= 1 && gameState.currentTurn > 1) {
+  if (didTurnCounterReset(gameState.currentTurn, snapshot.turnNumber)) {
     gameState = resetGameState();
+    clearPendingDrawBuffer(pendingDrawBuffer);
     latestSnapshot = null;
     selectedPlayer = "";
+    selectedPlayerPinned = false;
+    waitingForFreshTrackerData = true;
+    sendTrackerClear();
   }
 
   // Mark bridge as active on first snapshot — enables hybrid rendering
@@ -354,6 +414,7 @@ chrome.runtime.onMessage.addListener(
   (message: { type: string; player?: string }) => {
     if (message.type === "SELECT_PLAYER" && message.player) {
       selectedPlayer = message.player;
+      selectedPlayerPinned = true;
       sendTrackerUpdate();
     }
   },
