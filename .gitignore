@@ -3,8 +3,10 @@ dist/
 .DS_Store
 *.log
 *.tsbuildinfo
+.Codex/worktrees/
 .claude/worktrees/
 test-results/
 playwright-report/
+output/
 
 .env

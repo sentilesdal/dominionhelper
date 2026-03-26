@@ -31,15 +31,20 @@ npm run build
 | ---------------------- | --------------------------------------------------------- |
 | `npm run build`        | Typecheck + build extension to `dist/`                    |
 | `npm run dev`          | Build without typecheck (faster)                          |
-| `npm test`             | Run tests once                                            |
+| `npm test`             | Run the Vitest unit suite once                            |
+| `npm run test:unit`    | Run the Vitest unit suite                                 |
 | `npm run test:tracker` | Run tracker-focused unit tests                            |
 | `npm run test:watch`   | Run tests in watch mode                                   |
+| `npm run test:e2e`     | Run all Playwright coverage                               |
 | `npm run test:smoke`   | Run the stable extension smoke suite in Playwright        |
 | `npm run test:auth`    | Run authenticated dominion.games tracker Playwright tests |
+| `npm run test:login`   | Run the focused login-debug Playwright helper             |
 | `npm run lint`         | Check for lint errors                                     |
 | `npm run lint:fix`     | Auto-fix lint errors                                      |
 | `npm run format`       | Format all files with Prettier                            |
 | `npm run typecheck`    | Run TypeScript type checker                               |
+
+Vitest unit coverage lives in `tests/unit/`. Browser automation and live dominion.games coverage live in `tests/e2e/`.
 
 ### Loading the Extension
 
@@ -54,6 +59,7 @@ After code changes, run `npm run build` again and click the reload button on the
 ### Tracker Development Workflow
 
 Tracker work has a dedicated verification loop in [docs/workflows/tracker-development.md](docs/workflows/tracker-development.md).
+The longer-term fixture-based replay plan lives in [docs/workflows/tracker-ground-truth-plan.md](docs/workflows/tracker-ground-truth-plan.md).
 
 For tracker changes, use this minimum loop:
 
@@ -97,7 +103,11 @@ src/
 scripts/
   build.mjs             # Multi-entry Vite build script
 tests/
-  engine.test.ts        # Analysis engine tests
+  unit/
+    engine.test.ts      # Vitest unit tests
+  e2e/
+    smoke.spec.ts       # Playwright smoke coverage
+    auth.spec.ts        # Playwright authenticated flows
 ```
 
 The build script bundles three entry points into IIFE format (required by Chrome content scripts):
@@ -120,5 +130,6 @@ The build script bundles three entry points into IIFE format (required by Chrome
 - TypeScript (strict mode)
 - Vite (bundler)
 - Vitest (testing)
+- Playwright (browser automation)
 - ESLint + Prettier (linting/formatting)
 - Chrome Extension Manifest V3
