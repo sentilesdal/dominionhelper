@@ -1,28 +1,28 @@
 // Playwright configuration for E2E testing of the Dominion Helper Chrome extension.
 //
 // Key settings:
-// - testDir: e2e/ (separate from Vitest unit tests in tests/)
+// - testDir: tests/e2e/ (Vitest unit tests live in tests/unit/)
 // - globalSetup: builds the extension before tests run
 // - workers: 1 (serial execution -- single dominion.games account)
 // - channel: 'chromium' (bundled Chromium, not system Chrome)
 // - projects: separate configs for smoke vs auth tests (auth gets retry)
 // - outputDir: test-results/ for screenshots, traces, and debug artifacts
-import { defineConfig } from '@playwright/test';
+import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
-  testDir: './e2e',
-  globalSetup: './e2e/global-setup.ts',
-  outputDir: './test-results',
+  testDir: "./tests/e2e",
+  globalSetup: "./tests/e2e/global-setup.ts",
+  outputDir: "./test-results",
   workers: 1,
   timeout: 30000,
   use: {
-    channel: 'chromium',
+    channel: "chromium",
     // Auto-capture screenshot for every failed test so we can
     // inspect the actual page state instead of guessing at selectors.
-    screenshot: 'only-on-failure',
+    screenshot: "only-on-failure",
     // Keep trace ZIP for failed tests -- contains DOM snapshots,
     // network requests, and console logs for post-mortem debugging.
-    trace: 'retain-on-failure',
+    trace: "retain-on-failure",
   },
 
   // Project-based configuration allows different retry policies.
@@ -31,12 +31,12 @@ export default defineConfig({
   // Smoke tests have no retries -- they should always pass reliably.
   projects: [
     {
-      name: 'smoke',
-      testMatch: 'smoke.spec.ts',
+      name: "smoke",
+      testMatch: "smoke.spec.ts",
     },
     {
-      name: 'auth',
-      testMatch: 'auth.spec.ts',
+      name: "auth",
+      testMatch: "auth.spec.ts",
       retries: 1,
       // Auth tests need a longer timeout because login, stale game
       // cleanup, and table creation all involve server round-trips.

@@ -373,7 +373,9 @@ function getAngularVisibleZone(
   zoneName: string,
 ): Map<string, number> {
   const cards = new Map<string, number>();
-  const zone = player.zones.find((candidate) => candidate.zoneName === zoneName);
+  const zone = player.zones.find(
+    (candidate) => candidate.zoneName === zoneName,
+  );
   if (!zone) return cards;
 
   for (const card of zone.cards) {

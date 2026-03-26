@@ -193,12 +193,13 @@ function getStackCount(
   );
   const anonymousCount = asPositiveNumber(stack.privateAnonymousCards) ?? 0;
   const explicitCount =
-    asPositiveNumber(stack.privateCount) ??
-    asPositiveNumber(stack.count) ??
-    0;
+    asPositiveNumber(stack.privateCount) ?? asPositiveNumber(stack.count) ?? 0;
 
   const exactVisibilityZones = new Set(["HandZone", "InPlayZone", "TrashZone"]);
-  if (exactVisibilityZones.has(zoneName) && (visibleCount > 0 || anonymousCount > 0)) {
+  if (
+    exactVisibilityZones.has(zoneName) &&
+    (visibleCount > 0 || anonymousCount > 0)
+  ) {
     return visibleCount + anonymousCount;
   }
 
@@ -268,7 +269,9 @@ export function extractTurnNumber(game: unknown): number {
  * @param player - Angular player-like object
  * @returns Serialized player snapshot, or null when the player is invalid
  */
-export function extractPlayerSnapshot(player: unknown): BridgePlayerSnapshot | null {
+export function extractPlayerSnapshot(
+  player: unknown,
+): BridgePlayerSnapshot | null {
   const record = asRecord(player);
   const name = asString(record?.name);
   if (!record || !name) return null;
